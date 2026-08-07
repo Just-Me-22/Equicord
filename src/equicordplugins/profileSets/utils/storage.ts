@@ -16,8 +16,14 @@ const SERVER_PRESETS_KEY = "ProfilePresets_v2_Server";
 
 export type PresetSection = "main" | "server";
 
+export type ProfileFrame = {
+    skuId: string;
+    [key: string]: unknown;
+};
+
 export type ProfilePresetEx = ProfilePreset & {
     avatarRaw?: string | null;
+    profileFrame?: ProfileFrame | null;
 };
 
 export let presets: ProfilePresetEx[] = [];

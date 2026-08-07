@@ -5,8 +5,12 @@
  */
 
 import { getUserSettingLazy } from "@api/UserSettings";
-import { AvatarDecorationData, CustomStatus, DisplayNameStyles, Nameplate, ProfileEffect, ProfilePreset } from "@vencord/discord-types";
+import { fetchUserProfile } from "@utils/discord";
+import { AvatarDecorationData, CustomStatus, DisplayNameStyles, Nameplate, ProfileEffect } from "@vencord/discord-types";
 import { FluxDispatcher, GuildMemberStore, IconUtils, UserProfileSettingsStore, UserProfileStore, UserStore } from "@webpack/common";
+
+import { ProfileFrame, ProfilePresetEx } from "./storage";
+
 
 const CustomStatusSettings = getUserSettingLazy("status", "customStatus")!;
 
@@ -16,6 +20,7 @@ type PendingChanges = Record<string, unknown> & {
     pendingAvatarDecoration?: AvatarDecorationLike | null;
     pendingProfileEffect?: ProfileEffect | null;
     pendingNameplate?: Nameplate | null;
+    pendingProfileFrame?: ProfileFrame | null;
     pendingDisplayNameStyles?: DisplayNameStyles | null;
     pendingAccentColor?: number | null;
     pendingThemeColors?: number[] | null;
@@ -149,9 +154,9 @@ async function processImage(imageData: ImageInput, userId: string, type: "avatar
     return null;
 }
 
-export async function getCurrentProfile(guildId?: string, options: CurrentProfileOptions = {}): Promise<Omit<ProfilePreset, "name" | "timestamp">> {
+export async function getCurrentProfile(guildId?: string, options: CurrentProfileOptions = {}): Promise<Omit<ProfilePresetEx, "name" | "timestamp">> {
     const currentUser = UserStore.getCurrentUser();
-    const baseProfile = UserProfileStore.getUserProfile(currentUser.id);
+    const baseProfile = await fetchUserProfile(currentUser.id);
     const isGuildProfile = options.isGuildProfile ?? Boolean(guildId);
     const effectiveGuildId = isGuildProfile ? guildId : undefined;
     const guildProfile = effectiveGuildId ? UserProfileStore.getGuildMemberProfile(currentUser.id, effectiveGuildId) : null;
@@ -221,6 +226,8 @@ export async function getCurrentProfile(guildId?: string, options: CurrentProfil
         }
     }
 
+    const profileFrame = (pendingChanges.pendingProfileFrame ?? (userProfile as any)?.profileFrame ?? null) as ProfileFrame | null;
+
     const nameplateToUse = pendingChanges.pendingNameplate
         ?? (isGuildProfile ? guildMember?.collectibles?.nameplate : userAny.collectibles?.nameplate);
     const nameplate = nameplateToUse ? {
@@ -270,6 +277,7 @@ export async function getCurrentProfile(guildId?: string, options: CurrentProfil
         pronouns: pendingChanges.pendingPronouns ?? userProfile?.pronouns ?? null,
         avatarDecoration,
         profileEffect,
+        profileFrame,
         nameplate,
         primaryGuildId: isGuildProfile
             ? null
@@ -322,7 +330,7 @@ function nameplateEq(a: { skuId?: string | number | null; asset?: string | null;
     return String(a.skuId ?? "") === String(b.skuId ?? "") && String(a.asset ?? "") === String(b.asset ?? "");
 }
 
-export async function loadPresetAsPending(preset: ProfilePreset, guildId?: string, options: LoadPresetOptions = {}) {
+export async function loadPresetAsPending(preset: ProfilePresetEx, guildId?: string, options: LoadPresetOptions = {}) {
     try {
         const isGuild = options.isGuildProfile ?? Boolean(guildId);
         if (isGuild && !guildId) return;
@@ -403,6 +411,12 @@ export async function loadPresetAsPending(preset: ProfilePreset, guildId?: strin
         if (preset.profileEffect !== undefined && !collectibleEqBySku(preset.profileEffect, current.profileEffect)) {
             setPending({
                 pendingProfileEffect: preset.profileEffect
+            });
+        }
+
+        if (preset.profileFrame !== undefined && !collectibleEqBySku(preset.profileFrame, current.profileFrame)) {
+            setPending({
+                pendingProfileFrame: preset.profileFrame
             });
         }
 

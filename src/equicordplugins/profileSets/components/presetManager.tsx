@@ -6,8 +6,9 @@
 
 import { Button } from "@components/Button";
 import { Heading } from "@components/Heading";
+import { openUserProfile } from "@utils/discord";
 import { classes } from "@utils/misc";
-import { openModal, React, SelectedGuildStore, TextInput, useStateFromStores } from "@webpack/common";
+import { openModal, React, SelectedGuildStore, TextInput, UserStore, useStateFromStores } from "@webpack/common";
 
 import { cl, settings } from "../index";
 import { exportPresets, ImportDecision, importPresets, savePreset } from "../utils/actions";
@@ -89,6 +90,9 @@ export function PresetManager({ section, guildId }: PresetManagerProps) {
         setCurrentPresetIndex(index);
         loadPresetAsPending(presets[index], resolvedGuildId, {
             isGuildProfile: resolvedSection === "server"
+        }).then(() => {
+            const userId = UserStore.getCurrentUser()?.id;
+            if (userId != null) openUserProfile(userId);
         });
         forceUpdate();
     };
