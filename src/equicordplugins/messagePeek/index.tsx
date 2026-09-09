@@ -19,7 +19,7 @@ import definePlugin, { OptionType } from "@utils/types";
 import { Activity, ApplicationStream, Channel, Message, OnlineStatus, User } from "@vencord/discord-types";
 import { MessageFlags } from "@vencord/discord-types/enums";
 import { findByCodeLazy, findByPropsLazy, findComponentByCodeLazy, findCssClassesLazy } from "@webpack";
-import { ChannelStore, ExperimentStore, MessageStore, Parser, RelationshipStore, SnowflakeUtils, UserGuildSettingsStore, UserStore, useStateFromStores } from "@webpack/common";
+import { ChannelStore, ExperimentStore, FluxDispatcher, MessageStore, Parser, RelationshipStore, SnowflakeUtils, useEffect, UserGuildSettingsStore, UserStore, useState } from "@webpack/common";
 
 const cl = classNameFactory("vc-message-peek-");
 
@@ -119,7 +119,26 @@ function pluralize(count: number, singular: string, plural = singular + "s") {
     return count === 1 ? `1 ${singular}` : `${count} ${plural}`;
 }
 
+// parsing markdown into React elements is the expensive part of a row, and the row
+// re-renders on presence, typing and activity changes for text that has not moved
+const CONTENT_CACHE_MAX = 300;
+const contentCache = new Map<string, MessageContent | null>();
+
 function getMessageContent(message: Message): MessageContent | null {
+    const key = `${message.id}:${(message as any).editedTimestamp ?? ""}`;
+
+    const cached = contentCache.get(key);
+    if (cached !== undefined) return cached;
+
+    const content = computeMessageContent(message);
+
+    if (contentCache.size >= CONTENT_CACHE_MAX) contentCache.delete(contentCache.keys().next().value!);
+    contentCache.set(key, content);
+
+    return content;
+}
+
+function computeMessageContent(message: Message): MessageContent | null {
     if (message.content) {
         if (/https?:\/\/(\S+\.gif|tenor\.com|giphy\.com|klipy\.com)/i.test(message.content)) {
             return { text: "sent a GIF", icon: "gif" };
@@ -150,11 +169,43 @@ function getMessageContent(message: Message): MessageContent | null {
     return null;
 }
 
+// a MessageStore subscription per row re-runs its selector on every message in every
+// channel, so a DM list costs one pass per row per message. these listen to the
+// dispatcher instead, which names the channel, and wake only the rows watching it
+const watchers = new Map<string, Set<() => void>>();
+
+const MESSAGE_EVENTS = ["MESSAGE_CREATE", "MESSAGE_UPDATE", "MESSAGE_DELETE", "LOAD_MESSAGES_SUCCESS"] as const;
+
+function onMessageEvent(event: any) {
+    const channelId = event.channelId ?? event.message?.channel_id;
+    if (channelId == null) return;
+
+    const listeners = watchers.get(channelId);
+    if (listeners) for (const notify of listeners) notify();
+}
+
+function useLastMessage(channelId: string) {
+    const [message, setMessage] = useState(() => MessageStore.getLastMessage(channelId) as Message | undefined);
+
+    useEffect(() => {
+        const update = () => setMessage(MessageStore.getLastMessage(channelId) as Message | undefined);
+        update();
+
+        let listeners = watchers.get(channelId);
+        if (!listeners) watchers.set(channelId, listeners = new Set());
+        listeners.add(update);
+
+        return () => {
+            listeners!.delete(update);
+            if (listeners!.size === 0) watchers.delete(channelId);
+        };
+    }, [channelId]);
+
+    return message;
+}
+
 function MessagePreviewContent({ channel, user }: { channel: Channel; user: User | null | undefined; }) {
-    const lastMessage = useStateFromStores(
-        [MessageStore],
-        () => MessageStore.getLastMessage(channel.id) as Message | undefined
-    );
+    const lastMessage = useLastMessage(channel.id);
 
     if (channel.isSystemDM()) {
         return <>Official Discord Message</>;
@@ -220,7 +271,7 @@ function SubText({ channel, user, activities, applicationStream, voiceChannel, s
 }
 
 function Timestamp({ channel }: { channel: Channel; }) {
-    const lastMessage = useStateFromStores([MessageStore], () => MessageStore.getLastMessage(channel.id) as Message | undefined);
+    const lastMessage = useLastMessage(channel.id);
 
     if (!lastMessage) return null;
 
@@ -257,6 +308,8 @@ export default definePlugin({
     ],
 
     async start() {
+        for (const event of MESSAGE_EVENTS) FluxDispatcher.subscribe(event, onMessageEvent);
+
         const channels = ChannelStore.getSortedPrivateChannels()
             .slice(0, 25)
             .filter(c => !MessageStore.getLastMessage(c.id));
@@ -277,6 +330,11 @@ export default definePlugin({
                 await new Promise(r => setTimeout(r, 3000));
             }
         }
+    },
+
+    stop() {
+        for (const event of MESSAGE_EVENTS) FluxDispatcher.unsubscribe(event, onMessageEvent);
+        watchers.clear();
     },
 
     renderMemberListDecorator({ channel }: DecoratorProps) {
