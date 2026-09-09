@@ -333,18 +333,19 @@ export default definePlugin({
         },
         {
             find: "config.taskConfigV2.tasks).length)return",
-            group: true,
+            // not a group: a Discord change to one of these buttons used to revert both,
+            // which loses the whole tile rather than the half that actually broke
             predicate: () => !getQuestifySettings().disableQuestsEverything && hasEnabledAutoCompleteQuestTypes(),
             replacement: [
                 {
                     // Overwrite button props for UNENROLLED Quests.
-                    match: /(?<=onClick:\(\)=>{\i\?\.\(\),\i\(\)},text:\i,icon:\i,iconPosition:\i,fullWidth:!0)/,
+                    match: /(?<=\{size:\i,variant:\(0,\i\.\i\)\(\i\),onClick:\i\?\i\.\i:\i,text:\i,icon:\i,fullWidth:!0)(?=,"aria-disabled")/,
                     replace: ",...($self.getQuestButtonProps(arguments[0])??{})"
                 },
                 {
                     // Overwrite button props for ENROLLED/INCOMPLETE Quests.
-                    match: /(?<=let{quest:\i,taskType:\i,surface:\i.{0,150}?size:\i}=\i;return)(.{0,300}?,size:\i,surface:\i,analyticsCtxQuestContent:\i,analyticsCtxSourceQuestContent:\i}\))/,
-                    replace: " $self.enrolledIncompleteButton(arguments[0])||($1)"
+                    match: /return(\(0,\i\.jsx\)\(\i\.\i,\{variant:\(0,\i\.\i\)\(\i\),fullWidth:!0,size:\i,onClick:\i\?\i:\i,text:\i\?\i:\i\}\))/,
+                    replace: "return $self.enrolledIncompleteButton(arguments[0])||($1)"
                 }
             ]
         },
