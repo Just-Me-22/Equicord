@@ -58,6 +58,16 @@
     text-decoration: underline;
 }
 
+/* clearance so a stroked effect cannot touch the preceding @ */
+.smyn-prefix + .smyn-name {
+    margin-inline-start: 3px;
+}
+
+/* display name fonts vary wildly in x-height, so normalise apparent size */
+.smyn-styled-font {
+    font-size-adjust: 0.53;
+}
+
 .smyn-effect-container {
     position: relative;
     opacity: 1;
@@ -312,5 +322,78 @@
         background-position: 0 100%;
         perspective: 1px;
         transform: translate3d(0, .08em, 0);
+    }
+}
+
+.smyn-effect-gummy {
+    font-kerning: none;
+    font-variant-ligatures: none;
+}
+
+.smyn-effect-animated.smyn-effect-gummy {
+    --smyn-gummy-headroom: 0.12em;
+
+    margin-block: calc(var(--smyn-gummy-headroom)*-1);
+    padding-block: var(--smyn-gummy-headroom);
+}
+
+.smyn-gummy-letter {
+    display: inline-block;
+    white-space: pre;
+
+    /* fill must follow each letter, not the group */
+    -webkit-text-fill-color: currentcolor;
+}
+
+.smyn-effect-animated .smyn-gummy-letter {
+    animation: smyn-gummy-squish 4s cubic-bezier(.44, .29, .48, 1) infinite;
+    animation-delay: calc(var(--smyn-letter-index, 0)*50ms);
+    animation-fill-mode: forwards;
+}
+
+@keyframes smyn-gummy-squish {
+
+    0%,
+    35%,
+    100% {
+        transform: scaleX(1) scaleY(1);
+    }
+
+    7% {
+        transform: scaleX(1.28) scaleY(0.72);
+    }
+
+    14% {
+        transform: scaleX(0.82) scaleY(1.18);
+    }
+
+    21% {
+        transform: scaleX(1.1) scaleY(0.9);
+    }
+
+    28% {
+        transform: scaleX(0.96) scaleY(1.04);
+    }
+}
+
+.smyn-effect-prism {
+    background-image: linear-gradient(90deg, var(--smyn-effect-stops));
+    background-size: 200% auto;
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.smyn-effect-animated.smyn-effect-prism {
+    animation: smyn-prism-cycle 4s linear infinite;
+}
+
+@keyframes smyn-prism-cycle {
+    from {
+        background-position: 0 50%;
+    }
+
+    to {
+        background-position: 200% 50%;
     }
 }

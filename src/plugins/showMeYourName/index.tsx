@@ -19,7 +19,7 @@ import { Devs, EquicordDevs } from "@utils/constants";
 import { classNameFactory } from "@utils/index";
 import definePlugin, { OptionType } from "@utils/types";
 import { GuildMember, Message, RenderModalProps, User } from "@vencord/discord-types";
-import { findByCodeLazy } from "@webpack";
+import { filters, findByCodeLazy, mapMangledModuleLazy } from "@webpack";
 import { AccessibilityStore, ChannelStore, GuildMemberStore, GuildStore, Menu, MessageStore, Modal, openModal, RelationshipStore, StreamerModeStore, TextInput, useEffect, UserStore, useState } from "@webpack/common";
 import { JSX } from "react";
 
@@ -104,6 +104,24 @@ function validColor(color: string) {
     return !!toCSS(color);
 }
 
+let themeColorCache: { strong: string | null; muted: string; } | null = null;
+
+let themeObserver: MutationObserver | null = null;
+
+// getComputedStyle forces a style resolution, and this used to throw the cache away
+// every animation frame, so it ran on the render path constantly. The values only
+// change when the theme does, which is an attribute flip on <html>.
+function themeColors() {
+    if (themeColorCache === null) {
+        const styles = getComputedStyle(document.documentElement);
+        themeColorCache = {
+            strong: styles.getPropertyValue("--text-strong").trim() || null,
+            muted: styles.getPropertyValue("--text-muted").trim() || "#72767d"
+        };
+    }
+    return themeColorCache;
+}
+
 function resolveColor(
     colorStrings: colorStringsType,
     displayNameStyles: { effectId: number; colors: number[]; } | null | undefined,
@@ -113,7 +131,7 @@ function resolveColor(
     ircColorsEnabled: boolean,
     isHovering: boolean,
 ): Record<string, any> | null {
-    const defaultColor = getComputedStyle(document.documentElement).getPropertyValue("--text-strong").trim() || null;
+    const defaultColor = themeColors().strong;
 
     if (!defaultColor) { return null; }
 
@@ -203,20 +221,33 @@ function resolveColor(
     };
 }
 
+// The template only changes when the setting does, but these ran per rendered name.
+const splitTemplateCache = new Map<string, string[]>();
+const parseTemplateItemCache = new Map<string, { prefix: string; suffix: string; targetProcessedNames: string[]; }>();
+
 function splitTemplate(template: string) {
-    const items = template.trim().split(/(?<!,\s*)\s+/);
+    let items = splitTemplateCache.get(template);
+    if (!items) {
+        items = template.trim().split(/(?<!,\s*)\s+/);
+        splitTemplateCache.set(template, items);
+    }
     return items;
 }
 
 function parseTemplateItem(entry: string) {
+    let parsed = parseTemplateItemCache.get(entry);
+    if (parsed) return parsed;
+
     const [prefix, suffix] = entry.split(templatePattern);
     const names = entry.replace(prefix, "").replace(suffix, "").trim().replaceAll(/{|}/g, "").split(/,\s*/);
 
-    return {
+    parsed = {
         prefix: prefix ? prefix.trim() : "",
         suffix: suffix ? suffix.trim() : "",
         targetProcessedNames: names.map(name => name.trim()).filter(name => name.length > 0)
     };
+    parseTemplateItemCache.set(entry, parsed);
+    return parsed;
 }
 
 function validTemplate(value: string) {
@@ -397,6 +428,15 @@ function getMentionNameElement(props: mentionProps): JSX.Element | null {
     return renderUsername(author, channelId || null, nestedProps?.messageId || null, "mentions", mentionSymbol, false, !!channel?.guild_id, colorString, colorStrings)[1];
 }
 
+const DisplayNameStylesFont = mapMangledModuleLazy('location:"useDisplayNameStylesFont"', {
+    getFont: filters.byCode("className:")
+});
+
+function getFontClass(fontId: number | null | undefined): string | null {
+    if (fontId == null) return null;
+    return DisplayNameStylesFont.getFont?.(fontId)?.className || null;
+}
+
 function getEffectType(effectId: number | null | undefined): string | null {
     switch (effectId) {
         case 1: return "solid";
@@ -407,19 +447,60 @@ function getEffectType(effectId: number | null | undefined): string | null {
         case 3: return "neon";
         case 4: return "toon";
         case 5: return "pop";
+        // Glow is a gradient variant, delegated alongside case 2.
+        case 7: return "prism";
+        case 8: return "gummy";
         default: return null;
     }
+}
+
+const toHex = (n: number) => `#${(n >>> 0).toString(16).padStart(6, "0")}`;
+
+// Gummy is per letter: a solid palette colour cycled by index, and a squish
+// keyframe staggered 50ms apart. Discord splits into words first, so whitespace
+// takes no index and the cycle carries across the gap. Emoji pass through.
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
+function gummyLetters(node: any, palette: string[]) {
+    let index = 0;
+    const split = (value: any): any => {
+        if (typeof value === "string") {
+            return Array.from(graphemes.segment(value), s => s.segment).map(char => {
+                if (!char.trim()) return char;
+                const i = index++;
+                return (
+                    <span
+                        key={i}
+                        className="smyn-gummy-letter"
+                        style={{ color: palette[i % palette.length], "--smyn-letter-index": i } as React.CSSProperties}
+                    >{char}</span>
+                );
+            });
+        }
+        if (Array.isArray(value)) return value.map(split);
+        return value;
+    };
+    return split(node);
 }
 
 function computeEffectCSSVars(styles: any): Record<string, string> {
     if (!styles?.colors?.length) return {};
 
-    const toHex = (n: number) => `#${(n >>> 0).toString(16).padStart(6, "0")}`;
     const primary = toHex(styles.colors[0]);
     const secondary = styles.colors.length > 1 ? toHex(styles.colors[1]) : primary;
     const adjusted = adjustColor(primary);
 
+    // Gummy carries 4 colours and Prism 5, but the vars above only expose the
+    // first two. This mirrors Discord's own prism stop construction: every
+    // colour evenly spaced, with the first repeated at 100% so it can loop.
+    const palette = styles.colors.map(toHex);
+    const stops = palette.length > 1
+        ? Array.from({ length: palette.length + 1 }, (_, i) =>
+            `${palette[i % palette.length]} ${(100 * i / palette.length).toFixed(3)}%`).join(", ")
+        : `${primary} 0%, ${primary} 100%`;
+
     return {
+        "--smyn-effect-stops": stops,
         "--smyn-effect-main-color": adjusted.main,
         "--smyn-effect-gradient-start": primary,
         "--smyn-effect-gradient-end": secondary,
@@ -462,13 +543,16 @@ function renderUsername(
     const message = channelId && messageId ? MessageStore.getMessage(channelId, messageId) : null;
     const groupId = (message as any)?.showMeYourNameGroupId || null;
 
-    const isHovering = (isMessage || isMention)
-        ? ((messageId && hoveringMessageMap.has(messageId)) || (groupId && hoveringMessageMap.has(groupId)))
-        : isReply
-            ? (messageId && hoveringRepliesMap.has(messageId)) || (groupId && hoveringRepliesMap.has(groupId))
-            : isReactionsPopout
-                ? hoveringReactionPopoutSet.has((author as User).id)
-                : false;
+    const hoverKind: "message" | "reply" | "reaction" = isReply ? "reply" : isReactionsPopout ? "reaction" : "message";
+    const hoverIds = (isMessage || isMention || isReply)
+        ? [messageId, groupId].filter(Boolean) as string[]
+        : isReactionsPopout && author
+            ? [(author as User).id]
+            : [];
+
+    const isHovering = hookless
+        ? computeHovering(hoverKind, hoverIds)
+        : useHoverFlag(hoverKind, hoverIds);
 
     if (colorString && !colorStrings) {
         colorStrings = {
@@ -482,9 +566,13 @@ function renderUsername(
 
     const authorColorStrings = colorStrings || (author as any)?.colorStrings || null;
     const authorDisplayNameStyles = (!inGuild && !ircColorsEnabled && (author as any)?.displayNameStyles) || null;
+    const authorFontClass = getFontClass((author as any)?.displayNameStyles?.fontId);
     const effectType = authorDisplayNameStyles ? getEffectType(authorDisplayNameStyles.effectId) : null;
     const effectCSSVars = authorDisplayNameStyles ? computeEffectCSSVars(authorDisplayNameStyles) : {};
-    const hasEffect = !!effectType;
+    const gummyPalette = effectType === "gummy" && authorDisplayNameStyles.colors?.length
+        ? (authorDisplayNameStyles.colors as number[]).map(toHex)
+        : null;
+    const hasEffect = !!effectType && Object.keys(effectCSSVars).length > 0;
     const needsEffectDataAttr = effectType === "neon" || effectType === "toon" || effectType === "pop";
     const shouldShowEffect = hasEffect && isHovering;
     const shouldAnimateEffect = shouldShowEffect && !AccessibilityStore.useReducedMotion;
@@ -494,13 +582,26 @@ function renderUsername(
     const topRoleStyle = author ? resolveColor(authorColorStrings, authorDisplayNameStyles, "Role", canUseGradient, inGuild, ircColorsEnabled, isHovering) : null;
     const hasGradient = !!topRoleStyle?.gradient && Object.keys(topRoleStyle.gradient).length > 0;
 
-    const textMutedValue = getComputedStyle(document.documentElement)?.getPropertyValue("--text-muted")?.trim() || "#72767d";
+    const textMutedValue = themeColors().muted;
     const options = splitTemplate(includedNames);
-    const resolvedUsernameColor = author ? resolveColor(authorColorStrings, authorDisplayNameStyles, usernameColor.trim(), canUseGradient, inGuild, ircColorsEnabled, isHovering) : null;
-    const resolvedDisplayNameColor = author ? resolveColor(authorColorStrings, authorDisplayNameStyles, displayNameColor.trim(), canUseGradient, inGuild, ircColorsEnabled, isHovering) : null;
-    const resolvedNicknameColor = author ? resolveColor(authorColorStrings, authorDisplayNameStyles, nicknameColor.trim(), canUseGradient, inGuild, ircColorsEnabled, isHovering) : null;
-    const resolvedFriendNameColor = author ? resolveColor(authorColorStrings, authorDisplayNameStyles, friendNameColor.trim(), canUseGradient, inGuild, ircColorsEnabled, isHovering) : null;
-    const resolvedCustomNameColor = author ? resolveColor(authorColorStrings, authorDisplayNameStyles, customNameColor.trim(), canUseGradient, inGuild, ircColorsEnabled, isHovering) : null;
+
+    // Six colours were resolved per name even when the template showed two. Each call
+    // reads the theme and can hit the brightness canvas, so only do the ones in use.
+    // "user" is always included because it is the fallback when nothing else resolves.
+    const usedNames = new Set<string>(["user"]);
+    for (const option of options) {
+        for (const name of parseTemplateItem(option).targetProcessedNames) usedNames.add(name);
+    }
+
+    const resolve = (savedColor: string) => author
+        ? resolveColor(authorColorStrings, authorDisplayNameStyles, savedColor.trim(), canUseGradient, inGuild, ircColorsEnabled, isHovering)
+        : null;
+
+    const resolvedUsernameColor = usedNames.has("user") ? resolve(usernameColor) : null;
+    const resolvedDisplayNameColor = usedNames.has("display") ? resolve(displayNameColor) : null;
+    const resolvedNicknameColor = usedNames.has("nick") ? resolve(nicknameColor) : null;
+    const resolvedFriendNameColor = usedNames.has("friend") ? resolve(friendNameColor) : null;
+    const resolvedCustomNameColor = usedNames.has("custom") ? resolve(customNameColor) : null;
     const affixColor = { color: textMutedValue, "-webkit-text-fill-color": textMutedValue, isolation: "isolate", "white-space": "pre", "font-family": "var(--font-primary)", "letter-spacing": "normal" };
     const { username, display, nick, friend, custom } = getProcessedNames(author, truncateAllNamesWithStreamerMode, discriminators, inGuild, friendNameOnlyInDirectMessages, customNameOnlyInDirectMessages);
 
@@ -681,14 +782,17 @@ function renderUsername(
                 ...topLevelStyle,
                 ...(topRoleStyle?.normal.original || {})
             }}
-            className="smyn-container"
+            className={SMYNC("smyn-container", authorFontClass, { "smyn-styled-font": !!authorFontClass })}
         >
             {mentionSymbol && <span>{mentionSymbol}</span>}
             {(
                 <span
                     className={SMYNC(firstGroupClasses, { [gradientClasses]: shouldGradientGlow })}
                     data-text={shouldGradientGlow ? firstDataText : undefined}
-                    style={(shouldGradientGlow && useTopRoleStyle && topRoleStyle ? topRoleStyle.gradient.animated : undefined) as React.CSSProperties}
+                    // The role gradient paints through background-clip: text on this
+                    // group, which would cover an effect rendered on the name inside
+                    // it. Discord only ever applies one of the two, so does this.
+                    style={(shouldGradientGlow && useTopRoleStyle && topRoleStyle && !shouldShowEffect ? topRoleStyle.gradient.animated : undefined) as React.CSSProperties}
                 >
                     <span
                         className={SMYNC(firstNameClasses, {
@@ -707,7 +811,7 @@ function renderUsername(
                                         : topRoleStyle.normal.original
                                 : undefined
                         }>
-                        {first.wrapped}</span>
+                        {shouldShowEffect && gummyPalette ? gummyLetters(first.wrapped, gummyPalette) : first.wrapped}</span>
                 </span>
             )}
             {[
@@ -735,7 +839,10 @@ function renderUsername(
                         data-username-with-effects={needsEffectDataAttr && shouldShowEffect && !ignoreGradients ? name.name : undefined}
                         style={{
                             ...(ignoreFonts ? { "font-family": "var(--font-primary)", "letter-spacing": "normal" } : {}),
-                            ...(name.style
+                            // Same reason as the primary name above: these gradient
+                            // styles are inline on this element, so they would beat
+                            // the effect classes it is also carrying.
+                            ...(name.style && !(shouldShowEffect && !ignoreGradients)
                                 ? ignoreGradients
                                     ? name.style.normal.adjusted
                                     : shouldAnimateGradients && shouldAnimateSecondaryNames && name.style.gradient
@@ -745,7 +852,7 @@ function renderUsername(
                                             : name.style.normal.adjusted
                                 : {})
                         }}>
-                        {name.wrapped}</span>
+                        {shouldShowEffect && !ignoreGradients && gummyPalette ? gummyLetters(name.wrapped, gummyPalette) : name.wrapped}</span>
                     <span style={affixColor as React.CSSProperties} className={suffixClasses}>
                         {name.suffix}</span>
                 </span>
@@ -759,6 +866,37 @@ function renderUsername(
 const hoveringMessageMap = new Map<string, number>();
 const hoveringRepliesMap = new Map<string, number>();
 const hoveringReactionPopoutSet = new Set<string>();
+
+// Hover used to flip `triggerNameRerender`, a setting every rendered name subscribes
+// to, so moving the cursor across the message list re-rendered every name in the
+// client. These subscribers each recompute one boolean instead; React bails out of
+// the render when it is unchanged, so only the hovered name actually updates.
+const hoverSubs = new Set<() => void>();
+
+function notifyHoverChanged() {
+    for (const cb of hoverSubs) cb();
+}
+
+function computeHovering(kind: "message" | "reply" | "reaction", ids: string[]): boolean {
+    if (!ids.length) return false;
+    if (kind === "reaction") return ids.some(id => hoveringReactionPopoutSet.has(id));
+    const map = kind === "reply" ? hoveringRepliesMap : hoveringMessageMap;
+    return ids.some(id => map.has(id));
+}
+
+function useHoverFlag(kind: "message" | "reply" | "reaction", ids: string[]): boolean {
+    const key = kind + "|" + ids.join("|");
+    const [flag, setFlag] = useState(() => computeHovering(kind, ids));
+
+    useEffect(() => {
+        const cb = () => setFlag(computeHovering(kind, ids));
+        hoverSubs.add(cb);
+        cb();
+        return () => { hoverSubs.delete(cb); };
+    }, [key]);
+
+    return flag;
+}
 
 function handleHoveringMessage(message: any, isHovering: boolean) {
     const messageId = message?.id;
@@ -789,7 +927,7 @@ function addHoveringMessage(id: string) {
     hoveringMessageMap.set(id, currentCount + 1);
 
     if (currentCount === 0) {
-        settings.store.triggerNameRerender = !settings.store.triggerNameRerender;
+        notifyHoverChanged();
     }
 }
 
@@ -800,7 +938,7 @@ function removeHoveringMessage(id: string) {
 
     if (currentCount <= 1) {
         hoveringMessageMap.delete(id);
-        settings.store.triggerNameRerender = !settings.store.triggerNameRerender;
+        notifyHoverChanged();
     } else {
         hoveringMessageMap.set(id, currentCount - 1);
     }
@@ -813,7 +951,7 @@ function addHoveringReply(id: string) {
     hoveringRepliesMap.set(id, currentCount + 1);
 
     if (currentCount === 0) {
-        settings.store.triggerNameRerender = !settings.store.triggerNameRerender;
+        notifyHoverChanged();
     }
 }
 
@@ -824,7 +962,7 @@ function removeHoveringReply(id: string) {
 
     if (currentCount <= 1) {
         hoveringRepliesMap.delete(id);
-        settings.store.triggerNameRerender = !settings.store.triggerNameRerender;
+        notifyHoverChanged();
     } else {
         hoveringRepliesMap.set(id, currentCount - 1);
     }
@@ -832,12 +970,12 @@ function removeHoveringReply(id: string) {
 
 function addHoveringReactionPopout(id: string) {
     hoveringReactionPopoutSet.add(id);
-    settings.store.triggerNameRerender = !settings.store.triggerNameRerender;
+    notifyHoverChanged();
 }
 
 function removeHoveringReactionPopout(id: string) {
     hoveringReactionPopoutSet.delete(id);
-    settings.store.triggerNameRerender = !settings.store.triggerNameRerender;
+    notifyHoverChanged();
 }
 
 function CustomNicknameModal({ modalProps, user }: { modalProps: RenderModalProps; user: User; }) {
@@ -1241,11 +1379,21 @@ export default definePlugin({
         convertToRGBCtx = convertToRGBCanvas.getContext("2d", { willReadFrequently: true });
         convertToRGBCache = new Map();
 
+        themeColorCache = null;
+        themeObserver = new MutationObserver(() => { themeColorCache = null; });
+        themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "style"] });
+
         const data = await DataStore.get<CustomNicknameData>("SMYNCustomNicknames");
         customNicknames = data ?? {};
     },
 
     stop() {
+        themeObserver?.disconnect();
+        themeObserver = null;
+        themeColorCache = null;
+        hoverSubs.clear();
+        splitTemplateCache.clear();
+        parseTemplateItemCache.clear();
         toCSSCache?.clear();
         toCSSCache = null;
         toCSSProbe = null;
