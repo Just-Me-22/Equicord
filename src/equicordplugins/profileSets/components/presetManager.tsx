@@ -12,12 +12,14 @@ import { openModal, React, SelectedGuildStore, showToast, TextInput, Toasts, Use
 
 import { cl, settings } from "../index";
 import { exportPresets, ImportDecision, importPresets, savePreset } from "../utils/actions";
+import { size, weight } from "../utils/inspect";
 import { hasUndo, loadPresetAsPending, undoLast } from "../utils/profile";
 import { loadPresets, presets, PresetSection, setCurrentPresetIndex } from "../utils/storage";
 import { ImportProfilesModal } from "./confirmModal";
 import { PresetList } from "./presetList";
 
-const PRESETS_PER_PAGE = 5;
+/** the shelf scrolls instead of paging. five per page meant clicking through pages to
+ *  find anything, and paging fought the move up and down actions. */
 
 type PresetManagerProps = {
     section?: PresetSection;
@@ -26,12 +28,11 @@ type PresetManagerProps = {
 
 export function PresetManager({ section, guildId }: PresetManagerProps) {
     const [presetName, setPresetName] = React.useState("");
+    const [search, setSearch] = React.useState("");
     const [, forceUpdate] = React.useReducer(x => x + 1, 0);
     const [isSaving, setIsSaving] = React.useState(false);
-    const [currentPage, setCurrentPage] = React.useState(1);
-    const [pageInput, setPageInput] = React.useState("1");
+    const [broken, setBroken] = React.useState(false);
     const [selectedPreset, setSelectedPreset] = React.useState<number>(-1);
-    const [searchMode, setSearchMode] = React.useState(false);
     const lastRandomIndexRef = React.useRef<number>(-1);
     const resolvedSection: PresetSection = section ?? "main";
     const isServerSection = resolvedSection === "server";
@@ -42,35 +43,26 @@ export function PresetManager({ section, guildId }: PresetManagerProps) {
     const resolvedGuildId = isServerSection ? (guildId ?? lastSelectedGuildId ?? undefined) : undefined;
     const canUseGuild = !isServerSection || Boolean(resolvedGuildId);
 
+    // the stored list is per section, not per guild, so changing the server picker used
+    // to re-read the same rows and throw away the selection for nothing
     React.useEffect(() => {
         let isActive = true;
         (async () => {
-            await loadPresets(resolvedSection);
+            const ok = await loadPresets(resolvedSection);
             if (!isActive) return;
+            setBroken(!ok);
             setSelectedPreset(-1);
-            setCurrentPage(1);
-            setPageInput("1");
             forceUpdate();
         })();
         return () => {
             isActive = false;
         };
-    }, [resolvedGuildId, resolvedSection]);
+    }, [resolvedSection]);
 
-    const filteredPresets = !searchMode
-        ? presets
-        : presets.filter(preset => preset.name.toLowerCase().includes(presetName.toLowerCase()));
-
-    const totalPages = Math.ceil(filteredPresets.length / PRESETS_PER_PAGE);
-    const startIndex = (currentPage - 1) * PRESETS_PER_PAGE;
-    const currentPresets = filteredPresets.slice(startIndex, startIndex + PRESETS_PER_PAGE);
-
-    const handlePageChange = (newPage: number) => {
-        if (newPage >= 1 && newPage <= totalPages) {
-            setCurrentPage(newPage);
-            setPageInput(String(newPage));
-        }
-    };
+    const wanted = search.trim().toLowerCase();
+    const shown = wanted
+        ? presets.filter(preset => preset.name.toLowerCase().includes(wanted))
+        : presets;
 
     const handleSavePreset = async () => {
         if (!canUseGuild) return;
@@ -80,7 +72,6 @@ export function PresetManager({ section, guildId }: PresetManagerProps) {
         try {
             await savePreset(trimmedName, resolvedSection, resolvedGuildId);
             setPresetName("");
-            handlePageChange(Math.ceil(presets.length / PRESETS_PER_PAGE));
         } catch (err) {
             showToast(`Could not save that profile: ${err}`, Toasts.Type.FAILURE);
         } finally {
@@ -149,7 +140,7 @@ export function PresetManager({ section, guildId }: PresetManagerProps) {
 
     const { avatarSize } = settings.store;
     const hasPresets = presets.length > 0;
-    const shouldShowPagination = filteredPresets.length > PRESETS_PER_PAGE;
+    const kept = presets.reduce((sum, preset) => sum + weight(preset), 0);
 
     return (
         <div className={classes(cl("section"), isServerSection ? cl("section-server") : "")} >
@@ -159,7 +150,7 @@ export function PresetManager({ section, guildId }: PresetManagerProps) {
 
             <div className={cl("text")}>
                 <TextInput
-                    placeholder={searchMode ? "Search profiles..." : "Profile Name"}
+                    placeholder="Name this profile"
                     value={presetName}
                     onChange={setPresetName}
                     className={cl("text-input")}
@@ -167,28 +158,14 @@ export function PresetManager({ section, guildId }: PresetManagerProps) {
             </div>
 
             <div className={cl("search")}>
-                {!searchMode && (
-                    <Button
-                        size="small"
-                        disabled={isSaving || !presetName.trim() || !canUseGuild}
-                        onClick={handleSavePreset}
-                        className={cl("search-button")}
-                    >
-                        {isSaving ? "Saving..." : "Save Profile"}
-                    </Button>
-                )}
-                {hasPresets && (
-                    <Button
-                        size="small"
-                        variant={searchMode ? "primary" : "secondary"}
-                        onClick={() => {
-                            setSearchMode(!searchMode);
-                            handlePageChange(1);
-                        }}
-                    >
-                        {searchMode ? "Cancel Search" : "Search"}
-                    </Button>
-                )}
+                <Button
+                    size="small"
+                    disabled={isSaving || !presetName.trim() || !canUseGuild}
+                    onClick={handleSavePreset}
+                    className={cl("search-button")}
+                >
+                    {isSaving ? "Saving..." : "Save Profile"}
+                </Button>
                 <Button
                     size="small"
                     variant="secondary"
@@ -214,85 +191,68 @@ export function PresetManager({ section, guildId }: PresetManagerProps) {
                 <Button
                     size="small"
                     variant="secondary"
-                    onClick={() => importPresets(forceUpdate, showImportPrompt, resolvedSection, resolvedGuildId)}
+                    onClick={() => importPresets(forceUpdate, showImportPrompt, resolvedSection)}
                     disabled={!canUseGuild}
                 >
                     Import
                 </Button>
-                <Button
-                    size="small"
-                    variant="secondary"
-                    onClick={() => exportPresets(resolvedSection)}
-                >
-                    Export All
-                </Button>
+                {hasPresets && (
+                    <Button
+                        size="small"
+                        variant="secondary"
+                        onClick={() => exportPresets(resolvedSection)}
+                    >
+                        Export All
+                    </Button>
+                )}
             </div>
+
+            {broken && (
+                <p className={cl("empty-state")}>
+                    Your saved profiles could not be read. Nothing has been lost, but do not save over
+                    them until this loads properly.
+                </p>
+            )}
 
             {hasPresets && (
                 <>
+                    <div className={cl("bar")}>
+                        <span className={cl("count")}>
+                            {wanted ? `${shown.length} of ${presets.length}` : `${presets.length} kept, ${size(kept)}`}
+                        </span>
+                        {presets.length > 4 && (
+                            <div className={cl("find")}>
+                                <input
+                                    type="text"
+                                    value={search}
+                                    placeholder="Search"
+                                    aria-label="Search saved profiles"
+                                    onChange={event => setSearch(event.currentTarget.value)}
+                                />
+                                {search && (
+                                    <button type="button" aria-label="Clear the search" onClick={() => setSearch("")}>
+                                        &times;
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
                     <PresetList
-                        presets={currentPresets}
+                        presets={shown}
                         allPresets={presets}
                         avatarSize={avatarSize}
                         selectedPreset={selectedPreset}
                         onLoad={handleLoadPreset}
-                        onUpdate={() => {
-                            const newTotal = Math.ceil(presets.length / PRESETS_PER_PAGE);
-                            if (newTotal === 0) {
-                                handlePageChange(1);
-                            } else if (currentPage > newTotal) {
-                                handlePageChange(newTotal);
-                            }
-                            forceUpdate();
-                        }}
+                        onUpdate={forceUpdate}
                         guildId={resolvedGuildId}
                         section={resolvedSection}
-                        currentPage={currentPage}
-                        onPageChange={handlePageChange}
                     />
-
-                    {shouldShowPagination && (
-                        <div className={cl("pagination")}>
-                            <Button
-                                size="small"
-                                variant="secondary"
-                                disabled={currentPage === 1}
-                                onClick={() => handlePageChange(currentPage - 1)}
-                            >
-                                ←
-                            </Button>
-                            <div className={cl("page")}>
-                                <input
-                                    type="text"
-                                    value={pageInput}
-                                    onChange={e => {
-                                        const { value } = e.target;
-                                        setPageInput(value);
-                                        const num = parseInt(value);
-                                        if (!isNaN(num) && num >= 1 && num <= totalPages) {
-                                            setCurrentPage(num);
-                                        }
-                                    }}
-                                    className={cl("page-input")}
-                                />
-                                <span className={cl("page-of")}>
-                                    / {totalPages}
-                                </span>
-                            </div>
-                            <Button
-                                size="small"
-                                variant="secondary"
-                                disabled={currentPage === totalPages}
-                                onClick={() => handlePageChange(currentPage + 1)}
-                            >
-                                →
-                            </Button>
-                        </div>
-                    )}
 
                     <hr className={cl("block")} />
                 </>
             )}
+
             <hr className={cl("block")} />
             {resolvedSection === "server" && (
                 <hr className={cl("block")} />

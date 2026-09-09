@@ -134,8 +134,25 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    flex: 1;
+    flex: 1 1 auto;
     min-width: 0;
+    padding: 4px 0;
+    border: none;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+    color: inherit;
+    font: inherit;
+}
+
+.vc-profile-presets-avatar-url:disabled {
+    cursor: default;
+}
+
+.vc-profile-presets-avatar-url:focus-visible {
+    outline: 2px solid var(--brand-experiment);
+    outline-offset: 2px;
+    border-radius: 4px;
 }
 
 .vc-profile-presets-rename {
@@ -156,41 +173,128 @@
     flex-direction: column;
     gap: 4px;
     margin-bottom: 12px;
-    padding: 12px;
+    padding: 8px;
     background-color: var(--background-secondary);
     border-radius: 8px;
     border: 2px solid var(--background-modifier-accent);
     min-width: 0;
     width: 100%;
     max-width: 660px;
+    max-height: 320px;
+    overflow: hidden auto;
+    overscroll-behavior: contain;
     align-self: flex-start;
+}
+
+.vc-profile-presets-list-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+.vc-profile-presets-list-container::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.vc-profile-presets-list-container::-webkit-scrollbar-thumb {
+    background: var(--background-modifier-accent);
+    border-radius: 4px;
+}
+
+.vc-profile-presets-list-container::-webkit-scrollbar-thumb:hover {
+    background: var(--background-modifier-selected);
+}
+
+.vc-profile-presets-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.vc-profile-presets-count {
+    color: var(--text-muted);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.vc-profile-presets-find {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: auto;
+    padding: 0 8px;
+    height: 24px;
+    width: 130px;
+    border-radius: 12px;
+    background: var(--background-modifier-hover);
+    transition: width 0.12s ease-out, background-color 0.12s ease-out;
+}
+
+.vc-profile-presets-find:focus-within {
+    width: 190px;
+    background: var(--background-modifier-selected);
+}
+
+.vc-profile-presets-find input {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 100%;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--text-default);
+    font-size: 12px;
+}
+
+.vc-profile-presets-find input:focus {
+    outline: none;
+}
+
+.vc-profile-presets-find input::placeholder {
+    color: var(--text-muted);
+}
+
+.vc-profile-presets-find button {
+    flex: 0 0 auto;
+    padding: 0 2px;
+    border: none;
+    background: none;
+    color: var(--text-muted);
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.vc-profile-presets-find button:hover {
+    color: var(--interactive-active);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .vc-profile-presets-find,
+    .vc-profile-presets-row {
+        transition: none;
+    }
 }
 
 .vc-profile-presets-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 10px 12px;
+    padding: 6px 8px 6px 12px;
     background-color: var(--background-primary);
     border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.15s ease;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
     border: 2px solid transparent;
-    outline: none;
     min-width: 0;
     width: 100%;
-    max-width: 300px;
-    align-self: flex-start;
 }
 
 .vc-profile-presets-row:hover {
-    background-color: var(--background-modifier-hover) !important;
-    border-color: var(--background-modifier-accent) !important;
+    background-color: var(--background-modifier-hover);
+    border-color: var(--background-modifier-accent);
 }
 
-.vc-profile-presets-row:focus-visible {
-    border-color: var(--brand-experiment) !important;
-    box-shadow: 0 0 0 2px var(--brand-experiment-30a);
+.vc-profile-presets-row:focus-within {
+    border-color: var(--brand-experiment);
 }
 
 .vc-profile-presets-row.selected {

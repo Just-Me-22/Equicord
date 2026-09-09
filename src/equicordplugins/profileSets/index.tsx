@@ -100,7 +100,4 @@ export default definePlugin({
 
     renderProfileSetsTab: ErrorBoundary.wrap((props: any) => <ProfileSetsTab {...props} />, { noop: true }),
 
-    start() {
-        loadPresets("main");
-    },
 });

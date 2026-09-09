@@ -47,6 +47,13 @@ export default function ProfileSetsTab() {
             </div>
 
             {section === "server" && (
+                <p className={cl("empty-state")}>
+                    One list, applied to whichever server you pick. Saving here reads that server's
+                    profile, and loading writes to it.
+                </p>
+            )}
+
+            {section === "server" && (
                 <div className={cl("guild-picker")}>
                     <SearchableSelect
                         options={guildOptions}

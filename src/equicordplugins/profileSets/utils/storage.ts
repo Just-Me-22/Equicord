@@ -44,7 +44,7 @@ function getLegacyKey(userId: string) {
     return `${LEGACY_PRESETS_KEY}:${userId}:main`;
 }
 
-export async function loadPresets(section: PresetSection) {
+export async function loadPresets(section: PresetSection): Promise<boolean> {
     try {
         const currentUser = UserStore.getCurrentUser();
         const userId = currentUser!.id;
@@ -53,7 +53,7 @@ export async function loadPresets(section: PresetSection) {
         const stored = await DataStore.get(key);
         if (stored && Array.isArray(stored)) {
             resetPresets(stored);
-            return;
+            return true;
         }
 
         if (section === "main") {
@@ -68,13 +68,15 @@ export async function loadPresets(section: PresetSection) {
                 await DataStore.set(key, legacyToUse);
                 await DataStore.del(legacyKey);
                 await DataStore.del(LEGACY_PRESETS_KEY);
-                return;
+                return true;
             }
         }
         resetPresets();
+        return true;
     } catch (err) {
         logger.error("Failed to load presets", err);
         resetPresets();
+        return false;
     }
 }
 

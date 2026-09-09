@@ -11,6 +11,7 @@ import { cl } from "..";
 import { deletePreset, movePreset, renamePreset, sendPreset, updatePresetFields } from "../utils/actions";
 import { getCurrentProfile } from "../utils/profile";
 import { PresetSection, type ProfilePresetEx } from "../utils/storage";
+import { ConfirmModal } from "./confirmModal";
 import { DetailsModal } from "./detailsModal";
 
 interface PresetListProps {
@@ -22,8 +23,6 @@ interface PresetListProps {
     onUpdate: () => void;
     guildId?: string;
     section: PresetSection;
-    currentPage: number;
-    onPageChange: (page: number) => void;
 }
 
 const DOTS = "M10 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm0 5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm0 5a1.5 1.5 0 110 3 1.5 1.5 0 010-3z";
@@ -36,9 +35,7 @@ export function PresetList({
     onLoad,
     onUpdate,
     guildId,
-    section,
-    currentPage,
-    onPageChange
+    section
 }: PresetListProps) {
     const [renaming, setRenaming] = React.useState<number>(-1);
     const [renameText, setRenameText] = React.useState("");
@@ -76,7 +73,7 @@ export function PresetList({
                 const commitRename = () => {
                     const nextName = renameText.trim();
                     if (!nextName) return;
-                    renamePreset(actualIndex, nextName, section, guildId);
+                    renamePreset(actualIndex, nextName, section);
                     onUpdate();
                 };
 
@@ -89,22 +86,15 @@ export function PresetList({
                 return (
                     <div
                         key={actualIndex}
-                        tabIndex={isRenaming ? -1 : 0}
-                        role="button"
-                        onClick={() => {
-                            if (!isRenaming) {
-                                onLoad(actualIndex);
-                            }
-                        }}
-                        onKeyDown={e => {
-                            if (!isRenaming && (e.key === "Enter" || e.key === " ")) {
-                                e.preventDefault();
-                                onLoad(actualIndex);
-                            }
-                        }}
                         className={classes(cl("row"), isSelected ? "selected" : "")}
                     >
-                        <div className={cl("avatar-url")}>
+                        <button
+                            type="button"
+                            className={cl("avatar-url")}
+                            disabled={isRenaming}
+                            aria-label={`Wear ${preset.name}`}
+                            onClick={() => onLoad(actualIndex)}
+                        >
                             {preset.avatarDataUrl && (
                                 <img
                                     src={preset.avatarDataUrl}
@@ -145,7 +135,7 @@ export function PresetList({
                                     </>
                                 )}
                             </div>
-                        </div>
+                        </button>
                         <div className={cl("updated")}>
                             <button
                                 type="button"
@@ -211,7 +201,7 @@ export function PresetList({
                                             type="button"
                                             className={cl("menu-item")}
                                             onClick={act(() => {
-                                                movePreset(actualIndex, actualIndex - 1, section, guildId);
+                                                movePreset(actualIndex, actualIndex - 1, section);
                                                 onUpdate();
                                             })}
                                         >
@@ -223,24 +213,23 @@ export function PresetList({
                                             type="button"
                                             className={cl("menu-item")}
                                             onClick={act(() => {
-                                                movePreset(actualIndex, actualIndex + 1, section, guildId);
+                                                movePreset(actualIndex, actualIndex + 1, section);
                                                 onUpdate();
                                             })}
                                         >
                                             Move down
                                         </button>
                                     )}
-                                    {currentPage > 1 && (
+                                    {actualIndex > 1 && (
                                         <button
                                             type="button"
                                             className={cl("menu-item")}
                                             onClick={act(() => {
-                                                movePreset(actualIndex, 0, section, guildId);
-                                                onPageChange(1);
+                                                movePreset(actualIndex, 0, section);
                                                 onUpdate();
                                             })}
                                         >
-                                            Move to page 1
+                                            Move to the top
                                         </button>
                                     )}
                                     <button
@@ -268,10 +257,20 @@ export function PresetList({
                                     <button
                                         type="button"
                                         className={classes(cl("menu-item"), cl("menu-item-danger"))}
-                                        onClick={act(async () => {
-                                            await deletePreset(actualIndex, section, guildId);
-                                            onUpdate();
-                                        })}
+                                        onClick={act(() => openModal(modalProps => (
+                                            <ConfirmModal
+                                                {...modalProps}
+                                                title={`Delete ${preset.name}?`}
+                                                message="The pictures in it go too, and there is no way back."
+                                                confirmText="Delete it"
+                                                cancelText="Keep it"
+                                                onCancel={() => { }}
+                                                onConfirm={async () => {
+                                                    await deletePreset(actualIndex, section);
+                                                    onUpdate();
+                                                }}
+                                            />
+                                        )))}
                                     >
                                         Delete
                                     </button>
