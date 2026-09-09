@@ -8,8 +8,8 @@ import { isNonNullish } from "@utils/guards";
 import { ProfilePreset } from "@vencord/discord-types";
 import { showToast, Toasts, UserProfileSettingsStore } from "@webpack/common";
 
-import { getCurrentProfile } from "./profile";
-import { addPreset, movePresetInArray, presets, PresetSection, type ProfilePresetEx, removePreset, replaceAllPresets, savePresetsData, updatePreset } from "./storage";
+import { getCurrentProfile, otherProfile } from "./profile";
+import { addPreset, appendToSection, movePresetInArray, presets, PresetSection, type ProfilePresetEx, removePreset, replaceAllPresets, savePresetsData, updatePreset } from "./storage";
 
 function isImageInput(value: unknown): value is string | { imageUri: string; } {
     if (typeof value === "string") return value.length > 0;
@@ -17,7 +17,8 @@ function isImageInput(value: unknown): value is string | { imageUri: string; } {
 }
 
 function getFreshPendingAvatar(section: PresetSection, guildId?: string): string | null {
-    const pending = (section === "server" && guildId
+    if (section === "server" && !guildId) return null;
+    const pending = (section === "server"
         ? UserProfileSettingsStore.getPendingChanges?.(guildId)
         : UserProfileSettingsStore.getPendingChanges?.()) ?? {};
     const pendingObj = pending as Record<string, unknown>;
@@ -41,23 +42,45 @@ export async function savePreset(name: string, section: PresetSection, guildId?:
     await savePresetsData(section);
 }
 
-export async function updatePresetField<K extends keyof Omit<ProfilePreset, "name" | "timestamp">>(
+export async function updatePresetFields(
     index: number,
-    field: K,
-    value: Omit<ProfilePreset, "name" | "timestamp">[K],
-    section: PresetSection,
-    guildId?: string
+    fields: Partial<Omit<ProfilePreset, "name" | "timestamp">>,
+    section: PresetSection
 ) {
     if (index < 0 || index >= presets.length) return;
-    void guildId;
 
-    const updatedPreset = {
-        ...presets[index],
-        [field]: value,
-        timestamp: Date.now()
-    };
-    updatePreset(index, updatedPreset);
+    const changed = Object.fromEntries(Object.entries(fields).filter(([, value]) => isNonNullish(value)));
+    updatePreset(index, { ...presets[index], ...changed, timestamp: Date.now() });
     await savePresetsData(section);
+}
+
+/** a server profile has no slot for a custom status or a server tag, and loading one
+ *  already skips them, so they travel with the preset rather than being thrown away.
+ *  sending it back the other way then still has them. */
+export async function sendPreset(index: number, from: PresetSection, mode: "copy" | "move") {
+    if (index < 0 || index >= presets.length) return null;
+
+    const to: PresetSection = from === "main" ? "server" : "main";
+    const landed = await appendToSection(to, presets[index]);
+
+    if (mode === "move") {
+        removePreset(index);
+        await savePresetsData(from);
+    }
+
+    return landed;
+}
+
+/** only what their profile hands out publicly. their custom status and server tag are
+ *  theirs and are left behind, along with anything a nitro subscription pays for that
+ *  you do not have: discord refuses those on save rather than here. */
+export async function stealLook(userId: string, name: string) {
+    const taken = await otherProfile(userId);
+    if (!taken) return false;
+
+    addPreset({ ...taken, name, timestamp: Date.now() });
+    await savePresetsData("main");
+    return true;
 }
 
 export async function deletePreset(index: number, section: PresetSection, guildId?: string) {

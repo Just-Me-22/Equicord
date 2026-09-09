@@ -90,6 +90,21 @@ export async function savePresetsData(section?: PresetSection) {
     }
 }
 
+/** reads and writes the other section straight through, so the list currently on
+ *  screen is left alone. loading it into `presets` would swap what the tab is showing. */
+export async function appendToSection(section: PresetSection, preset: ProfilePresetEx) {
+    const userId = UserStore.getCurrentUser()!.id;
+    const key = getPresetsKey(section, userId);
+    const stored = await DataStore.get<ProfilePresetEx[]>(key) ?? [];
+
+    const taken = new Set(stored.map(one => one.name));
+    let { name } = preset;
+    while (taken.has(name)) name = `${name} (copy)`;
+
+    await DataStore.set(key, [...stored, { ...preset, name }]);
+    return name;
+}
+
 export function setCurrentPresetIndex(index: number) {
     currentPresetIndex = index;
 }

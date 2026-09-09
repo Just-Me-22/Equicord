@@ -5,15 +5,13 @@
  */
 
 import { Button } from "@components/Button";
-import { HeadingPrimary } from "@components/Heading";
-import { SettingsTab, wrapTab } from "@components/settings";
 import { GuildStore, React, SearchableSelect, SelectedGuildStore, useStateFromStores } from "@webpack/common";
 
 import { cl } from "../index";
 import { PresetSection } from "../utils/storage";
 import { PresetManager } from "./presetManager";
 
-function ProfileSetsTab() {
+export default function ProfileSetsTab() {
     const [section, setSection] = React.useState<PresetSection>("main");
     const lastSelectedGuildId = useStateFromStores(
         [SelectedGuildStore],
@@ -30,9 +28,7 @@ function ProfileSetsTab() {
     const [guildId, setGuildId] = React.useState<string | undefined>(lastSelectedGuildId ?? guildOptions[0]?.value);
 
     return (
-        <SettingsTab>
-            <HeadingPrimary className={cl("tab-heading")}>Profile Sets</HeadingPrimary>
-
+        <div className={cl("profile-tab")}>
             <div className={cl("section-switch")}>
                 <Button
                     size="small"
@@ -68,8 +64,6 @@ function ProfileSetsTab() {
             ) : (
                 <PresetManager section={section} guildId={section === "server" ? guildId : undefined} />
             )}
-        </SettingsTab>
+        </div>
     );
 }
-
-export default wrapTab(ProfileSetsTab, "Profile Sets");

@@ -177,17 +177,19 @@ export function openImageModal(item: Except<MediaModalItem, "type">, mediaModalP
     });
 }
 
-export async function openUserProfile(id: string) {
+/** @param guildId omit for whichever guild is open, which is what a profile opened from
+ *  the chat wants. pass null for the main profile even while a guild is selected. */
+export async function openUserProfile(id: string, guildId?: string | null) {
     const user = await UserUtils.getUser(id);
     if (!user) throw new Error("No such user: " + id);
 
-    const guildId = SelectedGuildStore.getGuildId();
+    const guild = guildId === undefined ? SelectedGuildStore.getGuildId() : guildId ?? undefined;
     UserProfileActions.openUserProfileModal({
         userId: id,
-        guildId,
+        guildId: guild,
         channelId: SelectedChannelStore.getChannelId(),
         analyticsLocation: {
-            page: guildId ? "Guild Channel" : "DM Channel",
+            page: guild ? "Guild Channel" : "DM Channel",
             section: "Profile Popout"
         }
     });

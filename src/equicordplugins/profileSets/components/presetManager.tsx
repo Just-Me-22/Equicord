@@ -8,11 +8,11 @@ import { Button } from "@components/Button";
 import { Heading } from "@components/Heading";
 import { openUserProfile } from "@utils/discord";
 import { classes } from "@utils/misc";
-import { openModal, React, SelectedGuildStore, TextInput, UserStore, useStateFromStores } from "@webpack/common";
+import { openModal, React, SelectedGuildStore, showToast, TextInput, Toasts, UserStore, useStateFromStores } from "@webpack/common";
 
 import { cl, settings } from "../index";
 import { exportPresets, ImportDecision, importPresets, savePreset } from "../utils/actions";
-import { loadPresetAsPending } from "../utils/profile";
+import { hasUndo, loadPresetAsPending, undoLast } from "../utils/profile";
 import { loadPresets, presets, PresetSection, setCurrentPresetIndex } from "../utils/storage";
 import { ImportProfilesModal } from "./confirmModal";
 import { PresetList } from "./presetList";
@@ -77,13 +77,19 @@ export function PresetManager({ section, guildId }: PresetManagerProps) {
         const trimmedName = presetName.trim();
         if (!trimmedName) return;
         setIsSaving(true);
-        await savePreset(trimmedName, resolvedSection, resolvedGuildId);
-        setPresetName("");
-        setIsSaving(false);
-        const newTotalPages = Math.ceil(presets.length / PRESETS_PER_PAGE);
-        handlePageChange(newTotalPages);
-        forceUpdate();
+        try {
+            await savePreset(trimmedName, resolvedSection, resolvedGuildId);
+            setPresetName("");
+            handlePageChange(Math.ceil(presets.length / PRESETS_PER_PAGE));
+        } catch (err) {
+            showToast(`Could not save that profile: ${err}`, Toasts.Type.FAILURE);
+        } finally {
+            setIsSaving(false);
+            forceUpdate();
+        }
     };
+
+    const [canUndo, setCanUndo] = React.useState(false);
 
     const applyPreset = (index: number) => {
         setSelectedPreset(index);
@@ -92,8 +98,9 @@ export function PresetManager({ section, guildId }: PresetManagerProps) {
             isGuildProfile: resolvedSection === "server"
         }).then(() => {
             const userId = UserStore.getCurrentUser()?.id;
-            if (userId != null) openUserProfile(userId);
-        });
+            if (userId != null) openUserProfile(userId, resolvedGuildId ?? null);
+        }).then(() => setCanUndo(hasUndo(resolvedGuildId)))
+            .catch(err => showToast(`Could not load that profile: ${err}`, Toasts.Type.FAILURE));
         forceUpdate();
     };
 
@@ -190,6 +197,20 @@ export function PresetManager({ section, guildId }: PresetManagerProps) {
                 >
                     Random
                 </Button>
+                {canUndo && (
+                    <Button
+                        size="small"
+                        variant="secondary"
+                        onClick={async () => {
+                            await undoLast(resolvedGuildId);
+                            setCanUndo(false);
+                            const userId = UserStore.getCurrentUser()?.id;
+                            if (userId != null) openUserProfile(userId, resolvedGuildId ?? null);
+                        }}
+                    >
+                        Undo load
+                    </Button>
+                )}
                 <Button
                     size="small"
                     variant="secondary"

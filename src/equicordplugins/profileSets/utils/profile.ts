@@ -11,7 +11,6 @@ import { FluxDispatcher, GuildMemberStore, IconUtils, UserProfileSettingsStore, 
 
 import { ProfileFrame, ProfilePresetEx } from "./storage";
 
-
 const CustomStatusSettings = getUserSettingLazy("status", "customStatus")!;
 
 type PendingChanges = Record<string, unknown> & {
@@ -50,7 +49,30 @@ type LoadPresetOptions = {
     skipBio?: boolean;
     skipPronouns?: boolean;
     isGuildProfile?: boolean;
+    /** field names to apply. leave it out and everything the preset has goes on. */
+    only?: string[];
 };
+
+/** what was on before the last load, so one button puts it back. one per profile,
+ *  since a server profile and the main one are staged separately. */
+const before = new Map<string, ProfilePresetEx>();
+
+/** the snapshot is loaded through the same path it was taken from, so it has to be
+ *  recognisable or undoing would overwrite the snapshot with itself */
+const UNDO_NAME = "profilesets-undo-snapshot";
+
+const slot = (guildId?: string) => guildId ?? "main";
+
+export const hasUndo = (guildId?: string) => before.has(slot(guildId));
+
+export async function undoLast(guildId?: string) {
+    const kept = before.get(slot(guildId));
+    if (!kept) return false;
+
+    before.delete(slot(guildId));
+    await loadPresetAsPending(kept, guildId, { isGuildProfile: guildId != null });
+    return true;
+}
 
 function dispatch(type: string, payload: Record<string, unknown>) {
     FluxDispatcher.dispatch({ type, ...payload });
@@ -60,19 +82,15 @@ function setPendingChanges(payload: Record<string, unknown>, guildId?: string) {
     dispatch("USER_PROFILE_SETTINGS_SET_PENDING_CHANGES", guildId ? { guildId, ...payload } : payload);
 }
 
-function openProfileImagePreview(
-    uploadType: "AVATAR" | "BANNER",
-    image: Extract<ImageInput, { imageUri: string; }>,
-    guildId?: string
-) {
-    dispatch("PROFILE_CUSTOMIZATION_OPEN_PREVIEW_MODAL", {
-        image,
-        file: {},
-        uploadType,
-        guildId,
-        analyticsSource: guildId ? "user settings guild profile" : "user settings user profile",
-        isTryItOut: false
-    });
+/** discord stores a freshly picked image as an upload descriptor, not a bare url. anything
+ *  already on its cdn, and null to clear, goes through untouched. */
+function toPendingImage(value: unknown, presetName?: string) {
+    if (typeof value !== "string" || !value.startsWith("data:")) return value;
+    return {
+        assetOrigin: "NEW_ASSET",
+        imageUri: value,
+        description: `profilesets-${presetName ?? "preset"}`
+    };
 }
 
 function isNonEmptyString(value: unknown): value is string {
@@ -112,7 +130,9 @@ function normalizeDisplayNameStyles(value: DisplayNameStylesLike | null | undefi
 
 export async function imageUrlToBase64(url: string): Promise<string | null> {
     try {
-        const response = await fetch(url);
+        // a stalled cdn request used to hang the save with no way out, since the button
+        // only clears once this resolves.
+        const response = await fetch(url, { signal: AbortSignal.timeout(15_000) });
         const blob = await response.blob();
         return await new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -154,6 +174,39 @@ async function processImage(imageData: ImageInput, userId: string, type: "avatar
     return null;
 }
 
+/** someone else's profile, read the way a preset is shaped. the images come down as
+ *  data urls the same as your own, so the set does not break when they change theirs. */
+export async function otherProfile(userId: string): Promise<Omit<ProfilePresetEx, "name" | "timestamp"> | null> {
+    const user = UserStore.getUser(userId);
+    const profile = await fetchUserProfile(userId);
+    if (!user) return null;
+
+    const avatar = IconUtils.getUserAvatarURL(user, true, 512);
+    const banner = profile?.banner
+        ? `https://cdn.discordapp.com/banners/${userId}/${profile.banner}.${profile.banner.startsWith("a_") ? "gif" : "png"}?size=1024`
+        : null;
+
+    const decoration = (user as any).avatarDecorationData;
+    const plate = (user as any).collectibles?.nameplate;
+
+    return {
+        avatarDataUrl: avatar ? await imageUrlToBase64(avatar) : null,
+        bannerDataUrl: banner ? await imageUrlToBase64(banner) : null,
+        bio: profile?.bio ?? null,
+        accentColor: profile?.accentColor ?? null,
+        themeColors: profile?.themeColors ?? null,
+        globalName: user.globalName ?? null,
+        pronouns: profile?.pronouns ?? null,
+        avatarDecoration: hasAvatarDecoration(decoration) ? { ...decoration, asset: decoration.asset, skuId: decoration.skuId } : null,
+        profileEffect: profile?.profileEffect ?? null,
+        profileFrame: (profile as any)?.profileFrame ?? null,
+        nameplate: plate ? { skuId: plate.skuId, asset: plate.asset, label: plate.label, palette: typeof plate.palette === "string" ? plate.palette : undefined, type: plate.type || 2 } : null,
+        primaryGuildId: null,
+        customStatus: null,
+        displayNameStyles: normalizeDisplayNameStyles((user as any).displayNameStyles)
+    };
+}
+
 export async function getCurrentProfile(guildId?: string, options: CurrentProfileOptions = {}): Promise<Omit<ProfilePresetEx, "name" | "timestamp">> {
     const currentUser = UserStore.getCurrentUser();
     const baseProfile = await fetchUserProfile(currentUser.id);
@@ -164,11 +217,11 @@ export async function getCurrentProfile(guildId?: string, options: CurrentProfil
     const userAny = currentUser;
     const guildMember = effectiveGuildId ? GuildMemberStore.getMember(effectiveGuildId, currentUser.id) : null;
 
-    const pendingChangesDefault: PendingChanges = UserProfileSettingsStore.getPendingChanges() ?? {};
-    const pendingChangesForGuild: PendingChanges = UserProfileSettingsStore.getPendingChanges(effectiveGuildId) ?? {};
-    const pendingChanges: PendingChanges = isGuildProfile && Object.keys(pendingChangesForGuild).length > 0
-        ? pendingChangesForGuild
-        : pendingChangesDefault;
+    // a guild profile reads only its own staged changes. falling back to the main profile's
+    // when the guild had none put a main profile avatar into a server preset.
+    const pendingChanges: PendingChanges = (isGuildProfile
+        ? (effectiveGuildId ? UserProfileSettingsStore.getPendingChanges(effectiveGuildId) : null)
+        : UserProfileSettingsStore.getPendingChanges()) ?? {};
     const customStatusSetting = CustomStatusSettings.getSetting();
     const customStatus = isGuildProfile
         ? null
@@ -337,6 +390,12 @@ export async function loadPresetAsPending(preset: ProfilePresetEx, guildId?: str
         const current = await getCurrentProfile(guildId, {
             isGuildProfile: isGuild
         });
+
+        if (preset.name !== UNDO_NAME) {
+            before.set(slot(isGuild ? guildId : undefined), { ...current, name: UNDO_NAME, timestamp: Date.now() });
+        }
+
+        const wanted = (field: string) => !options.only?.length || options.only.includes(field);
         const pendingChanges = (isGuild && guildId
             ? UserProfileSettingsStore.getPendingChanges(guildId)
             : UserProfileSettingsStore.getPendingChanges());
@@ -346,102 +405,78 @@ export async function loadPresetAsPending(preset: ProfilePresetEx, guildId?: str
             setPendingChanges(cleanPayload, isGuild ? guildId : undefined);
         };
 
-        if ("avatarDataUrl" in preset) {
+        if (wanted("avatar") && "avatarDataUrl" in preset) {
             const avatarValue = preset.avatarDataUrl;
             const presetAvatar = normalizeImageValue(avatarValue);
             const currentAvatar = normalizeImageValue(current.avatarDataUrl);
             const pendingAvatar = normalizeImageValue(resolvePendingAvatar(pendingChanges));
             if (presetAvatar !== currentAvatar && presetAvatar !== pendingAvatar) {
-                const avatarPayload =
-                    avatarValue?.startsWith?.("data:")
-                        ? {
-                            assetOrigin: "NEW_ASSET",
-                            imageUri: avatarValue,
-                            description: `profilesets-${preset.name ?? "preset"}`
-                        }
-                        : avatarValue;
-                const avatarImageUri = avatarPayload != null && "imageUri" in Object(avatarPayload)
-                    ? (avatarPayload as { imageUri?: unknown; }).imageUri
-                    : null;
-                if (isNonEmptyString(avatarImageUri)) {
-                    openProfileImagePreview("AVATAR", { ...Object(avatarPayload), imageUri: avatarImageUri }, guildId);
-                } else {
-                    setPending({ pendingAvatar: avatarPayload });
-                }
+                setPending({ pendingAvatar: toPendingImage(avatarValue, preset.name) });
             }
         }
 
-        if ("bannerDataUrl" in preset && preset.bannerDataUrl !== current.bannerDataUrl) {
-            const bannerPayload = preset.bannerDataUrl?.startsWith?.("data:")
-                ? {
-                    assetOrigin: "NEW_ASSET",
-                    imageUri: preset.bannerDataUrl,
-                    description: `profilesets-${preset.name ?? "preset"}`
-                }
-                : preset.bannerDataUrl;
-
-            const bannerImageUri = bannerPayload != null && "imageUri" in Object(bannerPayload)
-                ? (bannerPayload as { imageUri?: unknown; }).imageUri
-                : null;
-            if (isNonEmptyString(bannerImageUri)) {
-                openProfileImagePreview("BANNER", { ...Object(bannerPayload), imageUri: bannerImageUri }, guildId);
-            } else {
-                setPending({ pendingBanner: bannerPayload });
-            }
+        if (wanted("banner") && "bannerDataUrl" in preset && preset.bannerDataUrl !== current.bannerDataUrl) {
+            setPending({ pendingBanner: toPendingImage(preset.bannerDataUrl, preset.name) });
         }
 
-        if (!options.skipBio && preset?.bio !== current?.bio) {
+        if (wanted("bio") && !options.skipBio && preset?.bio !== current?.bio) {
             setPending({ pendingBio: preset.bio ?? "" });
         }
 
-        if (!options.skipPronouns && preset?.pronouns !== current?.pronouns) {
+        if (wanted("pronouns") && !options.skipPronouns && preset?.pronouns !== current?.pronouns) {
             setPending({ pendingPronouns: preset.pronouns ?? "" });
         }
 
-        if (!options.skipGlobalName && preset?.globalName !== current?.globalName) {
+        if (wanted("name") && !options.skipGlobalName && preset?.globalName !== current?.globalName) {
             setPending(isGuild ? { pendingNickname: preset.globalName } : { pendingGlobalName: preset.globalName });
         }
 
-        if (preset.avatarDecoration !== undefined && !avatarDecorationEq(preset.avatarDecoration, current.avatarDecoration)) {
+        if (wanted("decoration") && preset.avatarDecoration !== undefined && !avatarDecorationEq(preset.avatarDecoration, current.avatarDecoration)) {
             setPending({
                 pendingAvatarDecoration: preset.avatarDecoration
             });
         }
 
-        if (preset.profileEffect !== undefined && !collectibleEqBySku(preset.profileEffect, current.profileEffect)) {
+        if (wanted("effect") && preset.profileEffect !== undefined && !collectibleEqBySku(preset.profileEffect, current.profileEffect)) {
             setPending({
                 pendingProfileEffect: preset.profileEffect
             });
         }
 
-        if (preset.profileFrame !== undefined && !collectibleEqBySku(preset.profileFrame, current.profileFrame)) {
+        if (wanted("frame") && preset.profileFrame !== undefined && !collectibleEqBySku(preset.profileFrame, current.profileFrame)) {
             setPending({
                 pendingProfileFrame: preset.profileFrame
             });
         }
 
-        if (preset.nameplate !== undefined && !nameplateEq(preset.nameplate, current.nameplate)) {
+        if (wanted("nameplate") && preset.nameplate !== undefined && !nameplateEq(preset.nameplate, current.nameplate)) {
             setPending({
                 pendingNameplate: preset.nameplate
             });
         }
 
-        if (preset.displayNameStyles) {
+        if (wanted("nameStyle") && preset.displayNameStyles) {
             const presetDisplayNameStyles = normalizeDisplayNameStyles(preset.displayNameStyles);
             if (!jsonEq(presetDisplayNameStyles, current.displayNameStyles)) {
                 setPending({ pendingDisplayNameStyles: presetDisplayNameStyles });
             }
         }
 
-        if (preset.themeColors && !jsonEq(preset.themeColors, current.themeColors)) {
+        if (wanted("colours") && preset.themeColors && !jsonEq(preset.themeColors, current.themeColors)) {
             setPending({ pendingThemeColors: preset.themeColors });
         }
 
-        if (preset.primaryGuildId && !isGuild && preset.primaryGuildId !== current.primaryGuildId) {
+        // saved by every preset but never applied until now, so a set with a colour in
+        // it looked like it had lost one
+        if (wanted("colours") && preset.accentColor !== undefined && preset.accentColor !== current.accentColor) {
+            setPending({ pendingAccentColor: preset.accentColor });
+        }
+
+        if (wanted("tag") && preset.primaryGuildId && !isGuild && preset.primaryGuildId !== current.primaryGuildId) {
             setPending({ pendingPrimaryGuildId: preset.primaryGuildId });
         }
 
-        if (preset.customStatus && !isGuild && !customStatusEq(preset.customStatus, current.customStatus)) {
+        if (wanted("status") && preset.customStatus && !isGuild && !customStatusEq(preset.customStatus, current.customStatus)) {
             CustomStatusSettings.updateSetting({
                 text: preset.customStatus?.text ?? "",
                 expiresAtMs: preset.customStatus?.expiresAtMs ?? "0",
