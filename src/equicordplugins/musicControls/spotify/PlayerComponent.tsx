@@ -30,7 +30,9 @@ import { formatDuration } from "@utils/text";
 import { ContextMenuApi, FluxDispatcher, Menu, React, useEffect, useState, useStateFromStores } from "@webpack/common";
 
 import { settings } from "../settings";
+import { coverColour } from "./coverColour";
 import { SeekBar } from "./SeekBar";
+import { silhouette } from "./silhouette";
 import { SpotifyStore, Track } from "./SpotifyStore";
 
 const cl = classNameFactory("vc-spotify-");
@@ -152,8 +154,16 @@ const seek = debounce((v: number) => {
     SpotifyStore.seek(v);
 });
 
+const TICKS = 44;
+
 function SpotifySeekBar() {
-    const { duration } = SpotifyStore.track!;
+    const track = SpotifyStore.track!;
+    const { duration } = track;
+
+    const shape = React.useMemo(
+        () => silhouette(`${track.name}${track.artists?.[0]?.name ?? ""}`, TICKS),
+        [track.id, track.name]
+    );
 
     const [storePosition, isSettingPosition, isPlaying] = useStateFromStores(
         [SpotifyStore],
@@ -181,6 +191,15 @@ function SpotifySeekBar() {
 
     return (
         <div id={cl("progress-bar")}>
+            <div className={cl("wave")} aria-hidden="true">
+                {shape.map((height, at) => (
+                    <i
+                        key={at}
+                        className={at < Math.round(TICKS * position / duration) ? cl("wave-on") : undefined}
+                        style={{ height: `${height}%` }}
+                    />
+                ))}
+            </div>
             <Span
                 size="xs"
                 weight="medium"
@@ -358,6 +377,16 @@ export function SpotifyPlayer() {
 
     const isPlaying = useStateFromStores([SpotifyStore], () => SpotifyStore.isPlaying);
     const [shouldHide, setShouldHide] = useState(false);
+    const [tint, setTint] = useState<string | null>(null);
+
+    const cover = track?.album?.image?.url;
+    React.useEffect(() => {
+        let alive = true;
+        if (!cover) return setTint(null);
+
+        coverColour(cover).then(found => { if (alive) setTint(found); });
+        return () => { alive = false; };
+    }, [cover]);
 
     // Hide player after 5 minutes of inactivity
 
@@ -373,7 +402,8 @@ export function SpotifyPlayer() {
         return null;
 
     const exportTrackImageStyle = {
-        "--vc-spotify-track-image": `url(${track?.album?.image?.url || ""})`,
+        "--vc-spotify-track-image": `url(${cover || ""})`,
+        ...(tint ? { "--vc-spotify-cover-color": tint } : {})
     } as React.CSSProperties;
 
     return (
