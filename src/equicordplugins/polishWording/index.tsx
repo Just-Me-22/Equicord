@@ -8,10 +8,7 @@ import { ChatBarButton, ChatBarButtonFactory } from "@api/ChatButtons";
 import {
     MessageSendListener,
 } from "@api/MessageEvents";
-import {
-    definePluginSettings,
-    Settings,
-} from "@api/Settings";
+import { definePluginSettings } from "@api/Settings";
 import { Devs, EquicordDevs } from "@utils/constants";
 import definePlugin, { IconComponent, makeRange, OptionType } from "@utils/types";
 
@@ -63,22 +60,14 @@ const settings = definePluginSettings({
 });
 
 const PolishWordingIcon: IconComponent = ({ height = 20, width = 20, className, children }) => (
-    <svg
-        width={width}
-        height={height}
-        viewBox="0 0 24 24"
-        className={className}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-    >
-        <g mask="url(#vc-polish-wording-mask)">
-            <path d="M4 16 9 4l5 12" />
-            <path d="M6 12h6" />
-            <path d="m14.5 18.5 2.5 2.5 5-5.5" />
-        </g>
+    <svg width={width} height={height} viewBox="0 0 24 24" className={className}>
+        <path
+            fill="currentColor"
+            fillRule="evenodd"
+            clipRule="evenodd"
+            mask="url(#vc-polish-wording-mask)"
+            d="M5 2a3 3 0 0 0-3 3v14a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3V5a3 3 0 0 0-3-3H5Zm6.1 4h1.8l4.7 12h-2.6l-.95-2.5H9.95L9 18H6.4L11.1 6Zm.9 3.6-1.35 3.6h2.7L12 9.6Z"
+        />
         {children}
     </svg>
 );
@@ -90,7 +79,7 @@ function PolishWordingDisabledIcon() {
                 <path fill="#fff" d="M0 0h24v24H0Z" />
                 <path stroke="#000" strokeWidth="5.99068" d="M0 24 24 0" />
             </mask>
-            <path stroke="none" fill="var(--status-danger)" d="m21.178 1.70703 1.414 1.414L4.12103 21.593l-1.414-1.415L21.178 1.70703Z" />
+            <path fill="var(--status-danger)" d="m21.178 1.70703 1.414 1.414L4.12103 21.593l-1.414-1.415L21.178 1.70703Z" />
         </PolishWordingIcon>
     );
 }
@@ -197,9 +186,15 @@ const contractionsMap: { [key: string]: string; } = {
     "here's": "here is",
 };
 
+// Dropping the apostrophe from these leaves a word people genuinely type, so adding one back
+// turns "i feel ill" into "i feel i'll" and "a shed" into "a she'd".
+const ambiguousWithoutApostrophe = new Set(["ill", "shed", "wed"]);
+
 const missingApostropheMap: { [key: string]: string; } = {};
 for (const contraction in contractionsMap) {
     const withoutApostrophe = removeApostrophes(contraction.toLowerCase());
+    if (ambiguousWithoutApostrophe.has(withoutApostrophe)) continue;
+
     missingApostropheMap[withoutApostrophe] = contraction;
 }
 
@@ -287,7 +282,7 @@ function capitalize(textInput: string): string {
     const parts = textInput.split(sentenceSplitRegex);
     const filteredParts = parts.filter(part => part !== undefined && part !== null);
 
-    const blockedWordsArray: string[] = (Settings.plugins.PolishWording.blockedWords || "")
+    const blockedWordsArray: string[] = (settings.store.blockedWords || "")
         .split(/,\s?/)
         .filter(bw => bw)
         .map(bw => bw.toLowerCase());
