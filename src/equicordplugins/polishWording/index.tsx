@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import { ChatBarButton, ChatBarButtonFactory } from "@api/ChatButtons";
 import {
     MessageSendListener,
 } from "@api/MessageEvents";
@@ -12,7 +13,7 @@ import {
     Settings,
 } from "@api/Settings";
 import { Devs, EquicordDevs } from "@utils/constants";
-import definePlugin, { makeRange, OptionType } from "@utils/types";
+import definePlugin, { IconComponent, makeRange, OptionType } from "@utils/types";
 
 const presendObject: MessageSendListener = (channelId, msg) => {
     msg.content = textProcessing(msg.content);
@@ -61,14 +62,67 @@ const settings = definePluginSettings({
     }
 });
 
+const PolishWordingIcon: IconComponent = ({ height = 20, width = 20, className, children }) => (
+    <svg
+        width={width}
+        height={height}
+        viewBox="0 0 24 24"
+        className={className}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+    >
+        <g mask="url(#vc-polish-wording-mask)">
+            <path d="M4 16 9 4l5 12" />
+            <path d="M6 12h6" />
+            <path d="m14.5 18.5 2.5 2.5 5-5.5" />
+        </g>
+        {children}
+    </svg>
+);
+
+function PolishWordingDisabledIcon() {
+    return (
+        <PolishWordingIcon>
+            <mask id="vc-polish-wording-mask">
+                <path fill="#fff" d="M0 0h24v24H0Z" />
+                <path stroke="#000" strokeWidth="5.99068" d="M0 24 24 0" />
+            </mask>
+            <path stroke="none" fill="var(--status-danger)" d="m21.178 1.70703 1.414 1.414L4.12103 21.593l-1.414-1.415L21.178 1.70703Z" />
+        </PolishWordingIcon>
+    );
+}
+
+const PolishWordingToggle: ChatBarButtonFactory = ({ isMainChat }) => {
+    const { quickDisable } = settings.use(["quickDisable"]);
+
+    if (!isMainChat) return null;
+
+    return (
+        <ChatBarButton
+            tooltip={quickDisable ? "Enable PolishWording" : "Disable PolishWording"}
+            onClick={() => settings.store.quickDisable = !quickDisable}
+        >
+            {quickDisable ? <PolishWordingDisabledIcon /> : <PolishWordingIcon />}
+        </ChatBarButton>
+    );
+};
+
 export default definePlugin({
     name: "PolishWording",
     description: "Tweaks your messages to make them look nicer and have better grammar. See settings",
-    dependencies: ["MessageEventsAPI"],
+    dependencies: ["MessageEventsAPI", "ChatInputButtonAPI"],
     tags: ["Chat"],
     authors: [Devs.Samwich, EquicordDevs.WKoA],
     onBeforeMessageSend: presendObject,
     settings,
+
+    chatBarButton: {
+        icon: PolishWordingIcon,
+        render: PolishWordingToggle
+    }
 });
 
 function textProcessing(input: string) {
