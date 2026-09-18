@@ -190,8 +190,7 @@ const contractionsMap: { [key: string]: string; } = {
     "here's": "here is",
 };
 
-// Dropping the apostrophe from these leaves a word people genuinely type, so adding one back
-// turns "i feel ill" into "i feel i'll" and "a shed" into "a she'd".
+// These are words in their own right, so inserting the apostrophe would wreck them.
 const ambiguousWithoutApostrophe = new Set(["ill", "shed", "wed"]);
 
 const missingApostropheMap: { [key: string]: string; } = {};
@@ -269,7 +268,7 @@ function expandContractions(textInput: string) {
 
         let expansion = contractionsMap[lowerCaseMatch];
 
-        // In front of "been" the 's is "has", so "he's been" is "he has been", not "he is been".
+        // "he's been" is "he has been", not "he is been".
         if (expansion.endsWith(" is") && /^\s+been\b/i.test(full.slice(offset + match.length))) {
             expansion = `${expansion.slice(0, -3)} has`;
         }
