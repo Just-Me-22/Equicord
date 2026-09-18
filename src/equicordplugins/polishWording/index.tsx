@@ -28,8 +28,6 @@ const settings = definePluginSettings({
         description: "Words that will not be capitalized (comma separated).",
         default: "",
     },
-    // fixApostrophes is the only one that defaults to enabled because in the version before this one,
-    //   the other features did not exist / had a bug making them not work.
     fixApostrophes: {
         type: OptionType.BOOLEAN,
         description: "Ensure contractions contain apostrophes.",
@@ -115,12 +113,10 @@ export default definePlugin({
 });
 
 function textProcessing(input: string) {
-    // Quick disable, without having to reload the client
     if (settings.store.quickDisable) return input;
 
     let text = input;
 
-    // Preserve code blocks
     const codeBlockRegex = /```[\s\S]*?```|`[\s\S]*?`/g;
     const codeBlocks: string[] = [];
     text = text.replace(codeBlockRegex, match => {
@@ -128,8 +124,7 @@ function textProcessing(input: string) {
         return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
     });
 
-    // Run message through formatters.
-    if (settings.store.fixApostrophes || settings.store.expandContractions) text = ensureApostrophe(text); // Note: if expanding contractions, fix them first.
+    if (settings.store.fixApostrophes || settings.store.expandContractions) text = ensureApostrophe(text);
     if (settings.store.fixCapitalization) text = capitalize(text);
     if (settings.store.fixPunctuation && (Math.random() * 100 < settings.store.fixPunctuationFrequency)) text = addPeriods(text);
     if (settings.store.expandContractions) text = expandContractions(text);
@@ -139,7 +134,6 @@ function textProcessing(input: string) {
     return text;
 }
 
-// Injecting apostrophe as well as contraction expansion rely on this mapping
 const contractionsMap: { [key: string]: string; } = {
     "wasn't": "was not",
     "can't": "cannot",
@@ -190,7 +184,6 @@ const contractionsMap: { [key: string]: string; } = {
     "here's": "here is",
 };
 
-// These are words in their own right, so inserting the apostrophe would wreck them.
 const ambiguousWithoutApostrophe = new Set(["ill", "shed", "wed"]);
 
 const missingApostropheMap: { [key: string]: string; } = {};
@@ -204,7 +197,7 @@ for (const contraction in contractionsMap) {
 function getCapData(str: string) {
     const booleanArray: boolean[] = [];
     for (const char of str) {
-        if (char.match(/[a-zA-Z]/)) { // Only record capitalization for letters
+        if (char.match(/[a-zA-Z]/)) {
             booleanArray.push(char === char.toUpperCase());
         }
     }
@@ -225,7 +218,6 @@ function restoreCap(str: string, data: boolean[]): string {
         const isUppercase = data[dataIndex];
         resultString += isUppercase ? char.toUpperCase() : char.toLowerCase();
 
-        // Increment index unless the data in shorter than the string, in which case we use the most recent for the rest
         if (dataIndex < data.length - 1) dataIndex++;
     }
 
@@ -233,16 +225,15 @@ function restoreCap(str: string, data: boolean[]): string {
 }
 
 function ensureApostrophe(textInput: string): string {
-    // This function makes sure all contractions have apostrophes
 
     const potentialContractions = Object.keys(missingApostropheMap);
     if (potentialContractions.length === 0) {
-        return textInput; // Nothing to check if the map is empty
+        return textInput;
     }
 
     const findMissingRegex = new RegExp(
-        `\\b(${potentialContractions.join("|")})\\b`, // Match any of the keys as whole words
-        "gi" // Global (all occurrences), Case-insensitive
+        `\\b(${potentialContractions.join("|")})\\b`,
+        "gi"
     );
 
     return textInput.replace(findMissingRegex, match => {
@@ -268,7 +259,6 @@ function expandContractions(textInput: string) {
 
         let expansion = contractionsMap[lowerCaseMatch];
 
-        // "he's been" is "he has been", not "he is been".
         if (expansion.endsWith(" is") && /^\s+been\b/i.test(full.slice(offset + match.length))) {
             expansion = `${expansion.slice(0, -3)} has`;
         }
@@ -282,10 +272,7 @@ function removeApostrophes(str: string): string {
 }
 
 function capitalize(textInput: string): string {
-    // This one split ellipsis
-    // const sentenceSplitRegex = /((?<!\w\.\w.)(?<!\b[A-Z][a-z]\.)(?<![A-Z]\.)(?<=[.?!])\s+|\n+)/;
 
-    // Regex modified from several stack overflows, if you change make sure it's safe against https://devina.io/redos-checker
     const sentenceSplitRegex = /((?<!\w\.\w.)(?<!\b[A-Z][a-z]\.)(?<![A-Z]\.)(?<!\.)(?<=[.?!])\s+|\n+)/;
 
     const parts = textInput.split(sentenceSplitRegex);
@@ -296,31 +283,27 @@ function capitalize(textInput: string): string {
         .filter(bw => bw)
         .map(bw => bw.toLowerCase());
 
-    // Process alternating content and delimiters
     let result = "";
     for (let i = 0; i < filteredParts.length; i++) {
         const element = filteredParts[i];
 
-        const isSentence = !sentenceSplitRegex.test(element); // if it matches the delimiter regex, it's a delimiter
+        const isSentence = !sentenceSplitRegex.test(element);
 
         if (isSentence) {
-            // Check if this is just whitespace
             if (!element) continue;
             else if (element.trim() === "") {
                 result += element;
                 continue;
             }
 
-            // Find the first actual word character for capitalization check
             const firstWordMatch = element.match(/^\s*([\w'-]+)/);
             const firstWord = firstWordMatch ? firstWordMatch[1].toLowerCase() : "";
             const isBlocked = firstWord ? blockedWordsArray.includes(firstWord) : false;
 
             if (
                 !isBlocked &&
-                !element.startsWith("http") // Don't break links
+                !element.startsWith("http")
             ) {
-                // Capitalize the first non-whitespace character (sentence splits can include newlines etc)
                 result += element.replace(/^(\s*)(\S)/, (match, leadingSpace, firstChar) => {
                     return leadingSpace + firstChar.toUpperCase();
                 });
@@ -328,7 +311,6 @@ function capitalize(textInput: string): string {
                 result += element;
             }
         } else {
-            // This a delimiter (whitespace/newline regex), so we'll add it to the string to properly reconstruct without being lossy
             if (element) {
                 result += element;
             }
@@ -362,8 +344,8 @@ function addPeriods(textInput: string) {
         } else {
             const lastChar = strippedLine.slice(-1);
             if (
-                /[A-Za-z0-9]/.test(lastChar) && // If it doesn't already end with punctuation
-                !urlRegex.test(strippedLine) // If it doesn't end with a link
+                /[A-Za-z0-9]/.test(lastChar) &&
+                !urlRegex.test(strippedLine)
             ) {
                 processedLines.push(strippedLine + ".");
                 continue;
