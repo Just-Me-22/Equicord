@@ -7,6 +7,7 @@
 import { NavContextMenuPatchCallback } from "@api/ContextMenu";
 import { definePluginSettings, migratePluginSettings } from "@api/Settings";
 import { Button } from "@components/Button";
+import { RemixIcon } from "@components/Icons";
 import { EquicordDevs } from "@utils/constants";
 import { classNameFactory } from "@utils/css";
 import { getCurrentChannel } from "@utils/discord";
@@ -117,6 +118,21 @@ const imageContextMenuPatch: NavContextMenuPatchCallback = (children, props) => 
             id={GIFMAKER_ID}
             label="Make GIF"
             action={() => openModal(modalProps => <GifMakerModal url={info.url} isVideo={info.isVideo} sourceWidth={info.sourceWidth} sourceHeight={info.sourceHeight} {...modalProps} />)}
+        />
+    );
+};
+
+const gifPickerContextMenuPatch: NavContextMenuPatchCallback = (children, props) => {
+    if (!props?.src) return;
+
+    children.push(
+        <Menu.MenuItem
+            id="gif-maker-edit"
+            key="gif-maker-edit"
+            label="Edit GIF"
+            icon={RemixIcon}
+            leadingAccessory={{ type: "icon", icon: RemixIcon }}
+            action={() => openGifMakerFromItem(props)}
         />
     );
 };
@@ -485,22 +501,11 @@ export default definePlugin({
     managedStyle: css,
     contextMenus: {
         "message": messageContextMenuPatch,
-        "image-context": imageContextMenuPatch
+        "image-context": imageContextMenuPatch,
+        "gif-picker": gifPickerContextMenuPatch
     },
 
     start() {
         void fetchAllGoogleFonts();
-    },
-
-    gifPickerContextMenu(instance, _e: React.MouseEvent) {
-        if (!instance?.props?.item?.src) return null;
-        return (
-            <Menu.MenuItem
-                id="gif-maker-edit"
-                key="gif-maker-edit"
-                label="Edit GIF"
-                action={() => openGifMakerFromItem(instance?.props?.item)}
-            />
-        );
     },
 });

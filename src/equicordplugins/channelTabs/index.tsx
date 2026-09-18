@@ -8,6 +8,7 @@ import "./style.css";
 
 import { findGroupChildrenByChildId, NavContextMenuPatchCallback } from "@api/ContextMenu";
 import ErrorBoundary from "@components/ErrorBoundary";
+import { LinkIcon } from "@components/Icons";
 import { Devs, EquicordDevs } from "@utils/constants";
 import definePlugin from "@utils/types";
 import { Channel, Message } from "@vencord/discord-types";
@@ -17,6 +18,7 @@ import { JSX } from "react";
 import ChannelsTabsContainer from "./components/ChannelTabsContainer";
 import * as ChannelTabsUtils from "./util";
 import { BasicChannelTabsProps, createTab, handleChannelSwitch, settings } from "./util";
+import { clearTabState, useScrollManager } from "./util/scroll";
 
 const contextMenuPatch: NavContextMenuPatchCallback = (children, props: { channel: Channel, messageId?: string; }) => {
     const { channel, messageId } = props;
@@ -25,6 +27,8 @@ const contextMenuPatch: NavContextMenuPatchCallback = (children, props: { channe
         <Menu.MenuItem
             label="Open in New Tab"
             id="open-link-in-tab"
+            icon={LinkIcon}
+            leadingAccessory={{ type: "icon", icon: LinkIcon }}
             action={() => createTab({
                 guildId: channel.guild_id || "@me", // Normalize for DMs/Group Chats
                 channelId: channel.id
@@ -91,9 +95,28 @@ export default definePlugin({
                 replace: "$&if ($1.ctrlKey) return $self.open($2);"
             }
         },
+        {
+            find: "#{intl::CHANNEL_CHAT_HEADING}",
+            replacement: {
+                match: /hideSummaries:(\i)===(\i\.\i)\.OVERLAY/,
+                replace: "$&,vcChannelTabsMain:$1===$2.NORMAL"
+            }
+        },
+        {
+            find: "#{intl::CHANNEL_MESSAGES_A11Y_LABEL}",
+            replacement: {
+                match: /onScroll:(\i)\.handleScroll(?=,onMouseDown:\i\.handleMouseDown)/,
+                replace: "onScroll:$self.useScrollManager($1,arguments[0].vcChannelTabsMain).handleScroll"
+            }
+        }
     ],
 
     settings,
+    useScrollManager,
+
+    stop() {
+        clearTabState();
+    },
 
     start() {
         // migrate old settings to new granular keybind settings
