@@ -176,6 +176,10 @@ const contractionsMap: { [key: string]: string; } = {
     "you've": "you have",
     "we've": "we have",
     "they've": "they have",
+    "could've": "could have",
+    "would've": "would have",
+    "should've": "should have",
+    "might've": "might have",
     "you'd": "you would",
     "he'd": "he would",
     "she'd": "she would",
@@ -259,12 +263,18 @@ function expandContractions(textInput: string) {
         "gi"
     );
 
-    return textInput.replace(contractionRegex, match => {
+    return textInput.replace(contractionRegex, (match, _contraction, offset: number, full: string) => {
         const lowerCaseMatch = match.toLowerCase();
-        if (Object.prototype.hasOwnProperty.call(contractionsMap, lowerCaseMatch)) {
-            return restoreCap(contractionsMap[lowerCaseMatch], getCapData(match));
+        if (!Object.prototype.hasOwnProperty.call(contractionsMap, lowerCaseMatch)) return match;
+
+        let expansion = contractionsMap[lowerCaseMatch];
+
+        // In front of "been" the 's is "has", so "he's been" is "he has been", not "he is been".
+        if (expansion.endsWith(" is") && /^\s+been\b/i.test(full.slice(offset + match.length))) {
+            expansion = `${expansion.slice(0, -3)} has`;
         }
-        return match;
+
+        return restoreCap(expansion, getCapData(match));
     });
 }
 
