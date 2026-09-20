@@ -590,8 +590,13 @@
 /* Red glow effect for tabs with mentions */
 /* stylelint-disable-next-line no-descending-specificity */
 .vc-channeltabs-tab:has([data-has-mention="true"]) {
-    animation: vc-channeltabs-mention-pulse 2s ease-in-out infinite;
     box-shadow: 0 0 8px color-mix(in srgb, var(--danger-color, rgb(242 63 66)) 60%, transparent), 0 0 16px color-mix(in srgb, var(--danger-color, rgb(242 63 66)) 30%, transparent);
+}
+
+/* the glow marks the tab on its own; it only pulses while you are on it, so an
+   unread mention does not repaint the tab bar for as long as it sits there */
+.vc-channeltabs-tab:has([data-has-mention="true"]):hover {
+    animation: vc-channeltabs-mention-pulse 2s ease-in-out infinite;
 }
 
 @keyframes vc-channeltabs-mention-pulse {
@@ -617,8 +622,11 @@
 
 /* Pink Nitro glow effect (easter egg) */
 .vc-channeltabs-tab-nitro {
-    animation: vc-channeltabs-nitro-pulse 3s ease-in-out infinite;
     box-shadow: 0 0 10px rgb(255 115 250 / 70%), 0 0 20px rgb(255 115 250 / 40%);
+}
+
+.vc-channeltabs-tab-nitro:hover {
+    animation: vc-channeltabs-nitro-pulse 3s ease-in-out infinite;
 }
 
 @keyframes vc-channeltabs-nitro-pulse {
@@ -649,6 +657,9 @@
 
 .vc-channeltabs-tab-nitro .vc-channeltabs-tab-inner svg path {
     fill: rgb(255 115 250) !important;
+}
+
+.vc-channeltabs-tab-nitro:hover .vc-channeltabs-tab-inner svg path {
     animation: vc-channeltabs-nitro-icon-gradient 3s ease-in-out infinite;
 }
 
@@ -685,10 +696,14 @@
             transparent 75%,
             transparent);
     background-size: 300% 300%;
-    animation: vc-channeltabs-quests-diagonal 5s linear infinite;
-    opacity: 0.8;
+    opacity: 0;
     filter: blur(2px);
     pointer-events: none;
+}
+
+/* the sweep is invisible for most of its cycle anyway, so it rests at nothing */
+.vc-channeltabs-tab-quests-active:hover::before {
+    animation: vc-channeltabs-quests-diagonal 5s linear infinite;
 }
 
 .vc-channeltabs-tab-quests-active::after {
@@ -696,8 +711,12 @@
     position: absolute;
     inset: 0;
     border-radius: 11px;
-    animation: vc-channeltabs-quests-glow 3s ease-in-out infinite;
+    box-shadow: 0 0 8px 1px rgb(114 137 218 / 60%);
     pointer-events: none;
+}
+
+.vc-channeltabs-tab-quests-active:hover::after {
+    animation: vc-channeltabs-quests-glow 3s ease-in-out infinite;
 }
 
 @keyframes vc-channeltabs-quests-diagonal {
@@ -740,11 +759,14 @@
 
 /* Enhanced gradient for selected Quests tab with active quests */
 .vc-channeltabs-tab-selected.vc-channeltabs-tab-quests-active::before {
-    opacity: 1;
     filter: blur(3px);
 }
 
 .vc-channeltabs-tab-selected.vc-channeltabs-tab-quests-active::after {
+    box-shadow: 0 0 12px 2px rgb(114 137 218 / 80%);
+}
+
+.vc-channeltabs-tab-selected.vc-channeltabs-tab-quests-active:hover::after {
     animation: vc-channeltabs-quests-glow-selected 3s ease-in-out infinite;
 }
 
@@ -1343,4 +1365,17 @@
 /* disable transitions when compact expand animation is disabled */
 .vc-channeltabs-no-compact-animation .vc-channeltabs-tab-number-badge {
     transition: none !important;
+}
+
+/* the OS asked for less motion, so nothing here loops or slides */
+@media (prefers-reduced-motion: reduce) {
+    [class*="vc-channeltabs"],
+    [class*="vc-channeltabs"]::before,
+    [class*="vc-channeltabs"]::after,
+    [class*="channelTabs-"],
+    [class*="channelTabs-"]::before,
+    [class*="channelTabs-"]::after {
+        animation: none !important;
+        transition: none !important;
+    }
 }
