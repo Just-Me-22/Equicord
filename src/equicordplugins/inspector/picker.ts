@@ -9,7 +9,9 @@ import { read } from "./classMap";
 const LAYER = "vc-inspector-layer";
 
 let layer: HTMLElement | null = null;
-let picked: ((el: Element) => void) | null = null;
+let picked: ((el: Element, at: Point) => void) | null = null;
+
+export interface Point { x: number; y: number; }
 let hovered: Element | null = null;
 let frame = 0;
 
@@ -97,7 +99,9 @@ function take(e: MouseEvent) {
     document.addEventListener("click", swallow, true);
     const done = picked;
     disarm();
-    done?.(el);
+    // the point, not just the element: anything with pointer-events none is passed
+    // straight through by hit testing, so the report needs the coordinate to find it
+    done?.(el, { x: e.clientX, y: e.clientY });
 }
 
 function key(e: KeyboardEvent) {
@@ -107,7 +111,7 @@ function key(e: KeyboardEvent) {
     disarm();
 }
 
-export function arm(onPick: (el: Element) => void) {
+export function arm(onPick: (el: Element, at: Point) => void) {
     if (picked) disarm();
     picked = onPick;
     document.addEventListener("pointermove", move, true);

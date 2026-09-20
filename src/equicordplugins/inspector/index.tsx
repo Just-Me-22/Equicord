@@ -27,9 +27,9 @@ function hold(el: Element | null) {
 }
 
 function start() {
-    arm(el => {
+    arm((el, at) => {
         hold(el);
-        show(el);
+        show(el, undefined, at);
     });
     Toasts.show({ message: "Click an element, or press escape.", id: Toasts.genId(), type: Toasts.Type.MESSAGE });
 }
