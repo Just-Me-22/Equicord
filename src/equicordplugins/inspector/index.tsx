@@ -137,6 +137,11 @@ const settings = definePluginSettings({
         type: OptionType.COMPONENT,
         description: "Find the current class for a name.",
         component: () => <ErrorBoundary noop><Lookup /></ErrorBoundary>
+    },
+    fullCascade: {
+        type: OptionType.BOOLEAN,
+        description: "List every rule that lost, instead of the first four.",
+        default: false
     }
 });
 

@@ -11,7 +11,7 @@ import { Button, Modal, openModal, Text, TextInput, useEffect, useMemo, useRef, 
 
 import { read } from "./classMap";
 import { arm, Point, thumbnail } from "./picker";
-import { atPoint, compare, inside, label, layout, path, pseudo, selector, vars, winners } from "./rules";
+import { atPoint, compare, inside, label, layout, path, pseudo, selector, vars, warmRemoteSheets, winners } from "./rules";
 
 function Output({ lines }: { lines: string[]; }) {
     return (
@@ -172,7 +172,13 @@ const Native = VencordNative.pluginHelpers.Inspector as PluginNative<typeof impo
 
 const stamp = () => new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
 
-const nameFor = (el: Element) => read(el).find(one => one.name)?.name ?? el.tagName.toLowerCase();
+/** a run of files all called div.txt is impossible to tell apart later, so the tag and
+ *  the first couple of class tokens go in the name too */
+const nameFor = (el: Element) => {
+    const named = read(el).filter(one => one.name).map(one => one.name).slice(0, 2);
+    const tokens = named.length ? named : Array.from(el.classList).slice(0, 2).map(one => one.split("_")[0]);
+    return [el.tagName.toLowerCase(), ...tokens].join("-");
+};
 
 const typing = (el: EventTarget | null) => {
     const node = el as HTMLElement | null;
@@ -216,6 +222,16 @@ function Nearby({ el, at, close }: { el: Element; at?: Point; close: () => void;
  *  it are a few pixels apart and the wrong block reaches the clipboard. the number is
  *  both the label and the key that copies it. */
 function Report({ el, other, close }: { el: Element; other?: Element; close: () => void; }) {
+    // themes arrive through an @import from a cdn, and a cross-origin sheet throws on
+    // cssRules. fetching them first is the difference between naming the rule that wins
+    // and reporting that nine stylesheets could not be read.
+    const [warmed, setWarmed] = useState(false);
+    useEffect(() => {
+        let live = true;
+        warmRemoteSheets().then(() => live && setWarmed(true));
+        return () => { live = false; };
+    }, []);
+
     const sections = useMemo(() => [
         { title: "Element", lines: element(el), start: true },
         { title: "Selector", lines: selector(el), start: true },
@@ -226,7 +242,7 @@ function Report({ el, other, close }: { el: Element; other?: Element; close: () 
         { title: "Variables", lines: vars(el) },
         { title: "Layout", lines: layout(el) },
         ...(other ? [{ title: "Compared", lines: compare(el, other), start: true }] : [])
-    ], [el, other]);
+    ], [el, other, warmed]);
 
     const [copied, setCopied] = useState(-1);
 

@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import { Settings } from "@api/Settings";
+
 import { current, read } from "./classMap";
 
 /** Everything the inspect lens reports beyond the plain box chain: which rule wins
@@ -18,14 +20,36 @@ const TRACKED = [
     "flex", "order", "grid-area",
     "margin-top", "margin-bottom", "margin-left", "margin-right",
     "padding-top", "padding-bottom", "padding-left", "padding-right",
-    "background-color", "background-image", "color",
+    "background", "background-color", "background-image", "background-position", "background-size", "background-repeat",
+    "color",
+    "font-size", "font-family", "font-weight", "letter-spacing", "line-height",
     "border-top", "border-bottom", "border-left", "border-right",
     "border-radius", "clip-path",
     "box-shadow", "mask-image", "opacity", "filter",
+    "gap", "inset", "transform", "transition",
     // svg carries colour here rather than in background and color
     "fill", "stroke", "stroke-width",
     "overflow", "z-index"
 ];
+
+/** a value is only half an answer when it reads var(--x): the hops are where the
+ *  colour actually comes from, and which file you have to edit to change it. */
+function unwrapVars(value: string, el: Element): string {
+    const seen = new Set<string>();
+    const cs = getComputedStyle(el as HTMLElement);
+    const hops: string[] = [];
+
+    let name = value.match(/var\(\s*(--[\w-]+)/)?.[1];
+    while (name && !seen.has(name) && hops.length < 4) {
+        seen.add(name);
+        const resolved = cs.getPropertyValue(name).trim();
+        if (!resolved) break;
+        hops.push(`${name} = ${resolved}`);
+        name = resolved.match(/var\(\s*(--[\w-]+)/)?.[1];
+    }
+
+    return hops.length ? `   [${hops.join("  ->  ")}]` : "";
+}
 
 /** read back as (ids, classes, elements), because a tie is only recognisable as a tie
  *  when you can see both sides of it. */
@@ -42,6 +66,8 @@ function specificity(sel: string): number {
 /** the stylesheet a rule came from, named the way a person would recognise it */
 function sourceOf(sheet: CSSStyleSheet | null): string {
     if (!sheet) return "(inline)";
+    const fetched = remoteName.get(sheet);
+    if (fetched) return `${fetched}  (fetched)`;
     const node = sheet.ownerNode as HTMLElement | null;
     if (node?.id) return `<style #${node.id}>`;
     if (sheet.href) return sheet.href.split("/").pop() ?? sheet.href;
@@ -64,6 +90,97 @@ function resolve(sel: string, scope: string): string {
     }).join(", ");
 }
 
+/** a cross-origin sheet throws on cssRules, so its rules are invisible to the whole
+ *  report. every theme loaded through @import from a cdn lands here, which is exactly
+ *  the file you are usually trying to blame. fetching the text and parsing it into a
+ *  constructed sheet gets the rules back without applying them a second time. */
+const remote = new Map<string, CSSStyleSheet>();
+const remoteName = new WeakMap<CSSStyleSheet, string>();
+const remoteImports = new Map<string, string[]>();
+const unreadable = new Set<string>();
+
+function hrefsOf(rules: CSSRuleList, base: string, out: Set<string>) {
+    for (const rule of Array.from(rules)) {
+        const imported = rule as CSSImportRule;
+        if (imported.href) {
+            const url = new URL(imported.href, base).href;
+            try {
+                if (imported.styleSheet) hrefsOf(imported.styleSheet.cssRules, url, out);
+            } catch {
+                out.add(url);
+            }
+            continue;
+        }
+        const nested = (rule as CSSGroupingRule).cssRules;
+        if (nested?.length) hrefsOf(nested, base, out);
+    }
+}
+
+/** vencord serves themes on its own protocol, which fetch refuses. the theme file is
+ *  where the @import to the real rules lives, so without this the whole theme is dark
+ *  to the report. */
+async function textOf(url: string): Promise<string> {
+    const theme = url.match(/^vencord:\/\/\/themes\/([^?]+)/);
+    if (theme) {
+        const data = await VencordNative.themes.getThemeData(decodeURIComponent(theme[1]));
+        if (!data) throw new Error("no theme data");
+        return data;
+    }
+    return fetch(url).then(r => r.ok ? r.text() : Promise.reject(r.status));
+}
+
+/** a constructed stylesheet drops @import, so the chain has to be walked by hand or
+ *  every theme that imports its rules from a cdn stops one level short */
+const importsIn = (css: string, base: string) =>
+    Array.from(css.matchAll(/@import\s+(?:url\(\s*)?["']?([^"')\s]+)/g))
+        .map(m => {
+            try { return new URL(m[1], base).href; } catch { return ""; }
+        })
+        .filter(Boolean);
+
+async function warmOne(url: string, depth: number): Promise<void> {
+    if (remote.has(url) || unreadable.has(url) || depth > 4) return;
+    let text: string;
+    try {
+        text = await textOf(url);
+    } catch {
+        unreadable.add(url);
+        return;
+    }
+
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(text);
+    remote.set(url, sheet);
+    remoteName.set(sheet, url.split("/").pop()?.split("?")[0] || url);
+
+    const children = importsIn(text, url);
+    remoteImports.set(url, children);
+    await Promise.all(children.map(next => warmOne(next, depth + 1)));
+}
+
+export async function warmRemoteSheets(): Promise<void> {
+    const wanted = new Set<string>();
+
+    for (const sheet of Array.from(document.styleSheets)) {
+        try {
+            hrefsOf(sheet.cssRules, sheet.href ?? location.href, wanted);
+        } catch {
+            if (sheet.href) wanted.add(sheet.href);
+        }
+    }
+
+    await Promise.all(Array.from(wanted).map(url => warmOne(url, 0)));
+}
+
+/** what the report says instead of a bare count, so a sheet nobody could read is
+ *  still named rather than silently missing */
+export function remoteNote(): string[] {
+    const out: string[] = [];
+    for (const url of remote.keys()) out.push(`  fetched  ${url}`);
+    for (const url of unreadable) out.push(`  MISSING  ${url}`);
+    return out.length ? ["", "imported stylesheets", ...out] : [];
+}
+
 interface Hit {
     value: string;
     important: boolean;
@@ -73,9 +190,27 @@ interface Hit {
     src: string;
 }
 
-function collect(el: Element, out: Map<string, Hit[]>, pseudo = ""): { blocked: number; } {
+/** strips one level of :not(...) so the rest of the selector can be tested on its own */
+function withoutNot(sel: string): string {
+    let out = "";
+    for (let i = 0; i < sel.length; i++) {
+        if (!sel.startsWith(":not(", i)) {
+            out += sel[i];
+            continue;
+        }
+        let depth = 0;
+        for (; i < sel.length; i++) {
+            if (sel[i] === "(") depth++;
+            else if (sel[i] === ")" && --depth === 0) break;
+        }
+    }
+    return out.trim();
+}
+
+function collect(el: Element, out: Map<string, Hit[]>, pseudo = "", misses?: Set<string>): { blocked: number; } {
     let order = 0;
     let blocked = 0;
+    const walked = new Set<string>();
 
     const visit = (rules: CSSRuleList, sheet: CSSStyleSheet, scope: string) => {
         for (const rule of Array.from(rules)) {
@@ -96,7 +231,16 @@ function collect(el: Element, out: Map<string, Hit[]>, pseudo = ""): { blocked: 
                     const tail = sel.endsWith(pseudo) && pseudo ? sel.slice(0, -pseudo.length) : sel;
                     if (pseudo ? tail === sel : /::(before|after)/.test(sel)) continue;
                     try {
-                        if (!el.matches(tail)) continue;
+                        if (!el.matches(tail)) {
+                            // a rule excluded only by :not() is invisible in the report, yet
+                            // that exclusion is the whole reason the element looks different
+                            // from the one beside it
+                            if (misses && tail.includes(":not(")) {
+                                const bare = withoutNot(tail);
+                                if (bare && el.matches(bare)) misses.add(`${sel.slice(0, 70)}   from  ${sourceOf(sheet)}`);
+                            }
+                            continue;
+                        }
                         if (specificity(sel) < best) continue;
                         best = specificity(sel);
                         matched = sel;
@@ -124,9 +268,15 @@ function collect(el: Element, out: Map<string, Hit[]>, pseudo = ""): { blocked: 
             // an imported sheet is not in document.styleSheets and is reachable only
             // here. vencord loads every theme through @import, so skipping this hides
             // the theme's own rules from the whole report.
-            const imported = (rule as CSSImportRule).styleSheet;
-            if (imported) {
-                try { visit(imported.cssRules, imported, scope); } catch { blocked++; }
+            const importRule = rule as CSSImportRule;
+            if (importRule.href) {
+                const url = new URL(importRule.href, sheet.href ?? location.href).href;
+                try {
+                    if (!importRule.styleSheet) throw 0;
+                    visit(importRule.styleSheet.cssRules, importRule.styleSheet, scope);
+                } catch {
+                    if (!visitRemote(url, scope)) blocked++;
+                }
                 continue;
             }
 
@@ -139,8 +289,24 @@ function collect(el: Element, out: Map<string, Hit[]>, pseudo = ""): { blocked: 
         }
     };
 
+    // a constructed sheet reports no @import rules, so the chain warmOne recorded is
+    // the only way down to a theme that imports its rules from a cdn
+    const visitRemote = (url: string, scope: string): boolean => {
+        if (walked.has(url)) return true;
+        walked.add(url);
+        const fetched = remote.get(url);
+        if (!fetched) return false;
+        visit(fetched.cssRules, fetched, scope);
+        for (const child of remoteImports.get(url) ?? []) visitRemote(child, scope);
+        return true;
+    };
+
     for (const sheet of Array.from(document.styleSheets)) {
-        try { visit(sheet.cssRules, sheet as CSSStyleSheet, ""); } catch { blocked++; }
+        try {
+            visit(sheet.cssRules, sheet as CSSStyleSheet, "");
+        } catch {
+            if (!(sheet.href && visitRemote(sheet.href, ""))) blocked++;
+        }
     }
 
     // an inline style beats every rule, and means javascript is driving the value
@@ -166,8 +332,14 @@ function collect(el: Element, out: Map<string, Hit[]>, pseudo = ""): { blocked: 
 /** which rule actually wins for each tracked property, and what feeds it */
 export function winners(el: Element): string[] {
     const map = new Map<string, Hit[]>();
-    const { blocked } = collect(el, map);
-    const note = blocked ? [`${blocked} stylesheet${blocked > 1 ? "s" : ""} could not be read`] : [];
+    const misses = new Set<string>();
+    const { blocked } = collect(el, map, "", misses);
+    const near = misses.size
+        ? ["", `${misses.size} rule${misses.size > 1 ? "s" : ""} would land here but for a :not()`,
+            ...Array.from(misses).slice(0, 12).map(one => `  ${one}`)]
+        : [];
+    const note = [...near, ...remoteNote(),
+        ...(blocked ? ["", `${blocked} stylesheet${blocked > 1 ? "s" : ""} could not be read`] : [])];
     if (!map.size) return ["no matching rules found", ...note];
 
     const cs = getComputedStyle(el as HTMLElement);
@@ -175,18 +347,27 @@ export function winners(el: Element): string[] {
 
     for (const prop of TRACKED) {
         const hits = map.get(prop);
-        if (!hits?.length) continue;
+        if (!hits?.length) {
+            // without this line a property nothing readable declares looks identical to
+            // one nothing sets at all, which is how an unreadable sheet hides a rule
+            const computed = cs.getPropertyValue(prop);
+            if (computed) out.push(`${prop.padEnd(21)}${computed}   no readable rule declares this`);
+            continue;
+        }
         hits.sort((a, b) =>
             (+b.important - +a.important) || (b.spec - a.spec) || (b.order - a.order));
         const win = hits[0];
 
-        out.push(`${prop.padEnd(17)}${cs.getPropertyValue(prop) || "(empty)"}`);
+        out.push(`${prop.padEnd(21)}${cs.getPropertyValue(prop) || "(empty)"}`);
         out.push(`  won by  ${win.sel.slice(0, 58)}${win.important ? "  !important" : ""}  ${specText(win.spec)}`);
         out.push(`  from    ${win.src}`);
+        const chain = unwrapVars(win.value, el);
+        if (chain) out.push(`  value ${chain}`);
 
         // naming the rules that lost is the point: "beat 3 others" tells you a fight
         // happened, not who you are fighting, and the loser is usually your own line
-        for (const lost of hits.slice(1, 5)) {
+        const cap = Settings.plugins.Inspector.fullCascade ? hits.length : 5;
+        for (const lost of hits.slice(1, cap)) {
             // a tie lost on source order is the one worth shouting about: the loser is
             // written correctly and still does nothing, and no amount of changing its
             // value fixes that. one more class or attribute on the selector does.
@@ -196,7 +377,7 @@ export function winners(el: Element): string[] {
                 : "not important";
             out.push(`  ${tied ? "TIE " : "beat"}    ${lost.sel.slice(0, 48)}   ${lost.value.trim().slice(0, 20)}   ${why}`);
         }
-        if (hits.length > 5) out.push(`  beat    and ${hits.length - 5} more`);
+        if (hits.length > cap) out.push(`  beat    and ${hits.length - cap} more`);
 
         // a var() in the winning declaration names the token to edit
         for (const token of win.value.match(/--[\w-]+/g) ?? []) {
@@ -377,7 +558,7 @@ export function pseudo(el: Element): string[] {
             const value = cs.getPropertyValue(prop);
             if (!value || value === "none" || value === "auto" || value === "normal") continue;
 
-            out.push(`  ${prop.padEnd(17)}${value}`);
+            out.push(`  ${prop.padEnd(21)}${value}`);
             const hits = map.get(prop);
             if (!hits?.length) continue;
             hits.sort((a, b) => (+b.important - +a.important) || (b.spec - a.spec) || (b.order - a.order));
@@ -585,8 +766,8 @@ export function compare(a: Element, b: Element): string[] {
     const differs = TRACKED.filter(prop => ca.getPropertyValue(prop) !== cb.getPropertyValue(prop));
     out.push("", differs.length ? "differing properties" : "every tracked property matches");
     for (const prop of differs) {
-        out.push(`${prop.padEnd(17)}A ${ca.getPropertyValue(prop)}`);
-        out.push(`${"".padEnd(17)}B ${cb.getPropertyValue(prop)}`);
+        out.push(`${prop.padEnd(21)}A ${ca.getPropertyValue(prop)}`);
+        out.push(`${"".padEnd(21)}B ${cb.getPropertyValue(prop)}`);
     }
 
     return out;
