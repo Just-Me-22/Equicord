@@ -11,6 +11,7 @@ import { NavigationRouter, ReadStateStore, SelectedChannelStore, SelectedGuildSt
 import { JSX } from "react";
 
 import { logger, settings } from "./constants";
+import { autoGroupAll, autoGroupTab, normalizeContiguity, pruneGroups, removeFromGroup, resetGroups, tabGroups, ungroupAutoGroups } from "./groups";
 import { cacheCurrentTabState, clearTabState, restoreTabState, tabStateCache } from "./scroll";
 import { BasicChannelTabsProps, ChannelTabsProps, PersistedTabs } from "./types";
 
@@ -94,8 +95,9 @@ const genId = () => highestIdIndex++;
 const openTabs: ChannelTabsProps[] = [];
 const closedTabs: ChannelTabsProps[] = [];
 let currentlyOpenTab: number;
-const openTabHistory: number[] = [];
+export const openTabHistory: number[] = [];
 let hydratedUserId: string | undefined;
+let isHydrating = false;
 let hydrationGeneration = 0;
 let saveQueue = Promise.resolve();
 
@@ -113,6 +115,7 @@ const unsetUpdate: UpdateFunction = () => {
     logger.warn("Update function not set");
 };
 let update = unsetUpdate;
+export const triggerTabsUpdate = (save?: boolean) => update(save);
 let bumpGhostTabCount = () => {
     logger.warn("Set ghost tab function not set");
 };
@@ -122,7 +125,7 @@ let clearGhostTabs = () => {
 
 export function createTab(props: BasicChannelTabsProps | ChannelTabsProps, switchToTab?: boolean, messageId?: string, save = true, bypassOneTabPerServer = false) {
     // Important for the "One tab per server" feature, has to be before the maxOpenTabs check!
-    if (!bypassOneTabPerServer && settings.store.oneTabPerServer && props.guildId && props.guildId !== "@me") {
+    if (!bypassOneTabPerServer && settings.store.oneTabPerServer && !settings.store.autoGroupSameServer && props.guildId && props.guildId !== "@me") {
         const existingTab = openTabs.find(tab => tab.guildId === props.guildId);
         if (existingTab) {
             existingTab.channelId = props.channelId;
@@ -164,8 +167,10 @@ export function createTab(props: BasicChannelTabsProps | ChannelTabsProps, switc
     }
 
     const id = genId();
-    openTabs.push({ ...props, id, messageId, compact: "compact" in props ? props.compact : settings.store.openNewTabsInCompactMode });
+    const tab = { ...props, id, messageId, compact: "compact" in props ? props.compact : settings.store.openNewTabsInCompactMode };
+    openTabs.push(tab);
     stabilisePins();
+    if (!isHydrating) autoGroupTab(tab);
     if (switchToTab) moveToTab(id);
     clearGhostTabs();
     update(save);
@@ -178,6 +183,7 @@ export function closeTab(id: number) {
 
     const closed = openTabs.splice(i, 1);
     closedTabs.push(...closed);
+    pruneGroups();
 
     // the memory leak preventer
     tabStateCache.delete(id);
@@ -223,6 +229,7 @@ export function closeOtherTabs(id: number) {
     closedTabs.push(...removedTabs.reverse());
     const lastTab = openTabs.find(v => v.id === currentlyOpenTab)!;
     replaceArray(openTabs, tab);
+    pruneGroups();
     setOpenTab(id);
     replaceArray(openTabHistory, id);
 
@@ -238,6 +245,7 @@ export function closeTabsToTheRight(id: number) {
     closedTabs.push(...tabsToTheRight.reverse());
     const tabsToTheLeft = openTabs.filter((_, ind) => ind <= i);
     replaceArray(openTabs, ...tabsToTheLeft);
+    pruneGroups();
 
     if (!tabsToTheLeft.some(v => v.id === currentlyOpenTab)) moveToTab(openTabs.at(-1)!.id);
     else update();
@@ -251,6 +259,7 @@ export function closeTabsToTheLeft(id: number) {
     closedTabs.push(...tabsToTheLeft.reverse());
     const tabsToTheRight = openTabs.filter((_, ind) => ind >= i);
     replaceArray(openTabs, ...tabsToTheRight);
+    pruneGroups();
 
     if (!tabsToTheRight.some(v => v.id === currentlyOpenTab)) moveToTab(openTabs[0].id);
     else update();
@@ -316,7 +325,17 @@ export function handleChannelSwitch(ch: BasicChannelTabsProps) {
             return;
         }
 
-        openTabs[openTabs.indexOf(tab)] = { id: tab.id, compact: tab.compact, ...ch };
+        // rebuilding the tab object drops groupId, which silently ejects the tab from its
+        // group. keep it only while the channel stays in the same guild, since a group is
+        // per server.
+        const sameGuild = (tab.guildId || "@me") === (ch.guildId || "@me");
+        openTabs[openTabs.indexOf(tab)] = {
+            id: tab.id,
+            compact: tab.compact,
+            ...(sameGuild && { groupId: tab.groupId, escapedGroup: tab.escapedGroup }),
+            ...ch
+        };
+        pruneGroups();
         update();
     }
 }
@@ -332,6 +351,7 @@ export function togglePin(id: number) {
     if (!tab) return logger.error("Couldn't find channel tab with ID " + id, openTabs);
 
     tab.pinned = !tab.pinned;
+    if (tab.pinned && tab.groupId) removeFromGroup(tab.id, true);
     stabilisePins();
     update();
 }
@@ -393,6 +413,7 @@ export function moveDraggedTabs(index1: number, index2: number) {
 
     openTabs.splice(index2, 0, firstItem);
     stabilisePins();
+    normalizeContiguity(firstItem.id);
     update();
 }
 
@@ -493,6 +514,7 @@ export async function openStartupTabs(props: BasicChannelTabsProps & { userId: s
     replaceArray(openTabHistory);
     clearTabState();
     highestIdIndex = 0;
+    resetGroups(savedTabs?.tabGroups);
 
     if (keepCurrentChannel) {
         hydratedUserId = undefined;
@@ -500,6 +522,7 @@ export async function openStartupTabs(props: BasicChannelTabsProps & { userId: s
         return;
     }
 
+    isHydrating = true;
     switch (settings.store.onStartup) {
         case "remember": {
             if (!savedTabs?.openTabs.length) {
@@ -519,6 +542,11 @@ export async function openStartupTabs(props: BasicChannelTabsProps & { userId: s
             break;
         }
     }
+
+    isHydrating = false;
+    pruneGroups();
+    if (settings.store.autoGroupSameServer) autoGroupAll();
+    else ungroupAutoGroups();
 
     if (!openTabs.length)
         createTab({ channelId: props.channelId, guildId: props.guildId }, false, undefined, false);
@@ -569,10 +597,14 @@ export function reopenClosedTab() {
 
 export function saveTabs(userId: string): Promise<void> {
     if (!userId) return Promise.resolve();
+    // the bar always holds at least one tab, so an empty list means we are mid hydration.
+    // writing it would overwrite the user's saved tabs with nothing.
+    if (!openTabs.length) return Promise.resolve();
 
     const snapshot = {
         openTabs: openTabs.map(tab => ({ ...tab })),
-        openTabIndex: openTabs.findIndex(tab => tab.id === currentlyOpenTab)
+        openTabIndex: openTabs.findIndex(tab => tab.id === currentlyOpenTab),
+        tabGroups: tabGroups.map(group => ({ ...group }))
     };
 
     saveQueue = saveQueue

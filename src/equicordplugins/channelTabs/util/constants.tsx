@@ -39,7 +39,8 @@ function AnimationSettings(): JSX.Element {
         { label: "Tab Shadow Effects", value: "tab-shadows", selected: settings.store.animationTabShadows },
         { label: "Tab Repositioning (smooth position changes)", value: "tab-positioning", selected: settings.store.animationTabPositioning },
         { label: "Resize Handle Fade", value: "resize-handle", selected: settings.store.animationResizeHandle },
-        { label: "Active Quests Gradient", value: "quests-active", selected: settings.store.animationQuestsActive }
+        { label: "Active Quests Gradient", value: "quests-active", selected: settings.store.animationQuestsActive },
+        { label: "Tab Group Accordion", value: "group-expand", selected: settings.store.animationGroupExpand }
     ];
 
     const [currentValue, setCurrentValue] = useState(animationOptions.filter(option => option.selected).map(option => option.value));
@@ -64,6 +65,7 @@ function AnimationSettings(): JSX.Element {
         settings.store.animationTabPositioning = enabledValues.includes("tab-positioning");
         settings.store.animationResizeHandle = enabledValues.includes("resize-handle");
         settings.store.animationQuestsActive = enabledValues.includes("quests-active");
+        settings.store.animationGroupExpand = enabledValues.includes("group-expand");
 
         setCurrentValue(enabledValues);
     }
@@ -505,6 +507,12 @@ export const settings = definePluginSettings({
         default: true,
         hidden: true
     },
+    animationGroupExpand: {
+        type: OptionType.BOOLEAN,
+        description: "Enable the accordion animation when a tab group expands",
+        default: true,
+        hidden: true
+    },
     compactAutoExpandSelected: {
         type: OptionType.BOOLEAN,
         description: "Automatically expand compact tabs when selected to show the full channel name",
@@ -550,6 +558,26 @@ export const settings = definePluginSettings({
     oneTabPerServer: {
         type: OptionType.BOOLEAN,
         description: "Limit to one tab per server, so opening a new channel in that server will use the existing tab.",
+        default: false,
+        restartNeeded: false
+    },
+    groupHoverMenu: {
+        type: OptionType.BOOLEAN,
+        description: "Hovering a collapsed group opens a list of its channels to pick from.",
+        default: true,
+        restartNeeded: false
+    },
+    groupDropZone: {
+        type: OptionType.SLIDER,
+        description: "How much of a tab's width counts as the drop zone for grouping, as a percentage. The rest of the tab reorders as usual. Set to 0 to turn drag to group off.",
+        markers: makeRange(0, 80, 10),
+        default: 40,
+        stickToMarkers: true,
+        restartNeeded: false
+    },
+    autoGroupSameServer: {
+        type: OptionType.BOOLEAN,
+        description: "Group tabs from the same server together. Takes priority over \"One tab per server\", so extra channels open as grouped tabs instead of replacing the existing one.",
         default: false,
         restartNeeded: false
     },

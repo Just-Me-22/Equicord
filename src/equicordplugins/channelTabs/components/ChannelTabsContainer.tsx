@@ -7,7 +7,7 @@
 import { Flex } from "@components/Flex";
 import { Heading } from "@components/Heading";
 import { Paragraph } from "@components/Paragraph";
-import { BasicChannelTabsProps, ChannelTabsProps, clearStaleNavigationContext, closeTab, createTab, handleChannelSwitch, isNavigationFromSource, isTabSelected, jumpToUnreadTab, moveCurrentTab, moveToTab, openedTabs, openStartupTabs, saveTabs, settings, setUpdaterFunction, useGhostTabs } from "@equicordplugins/channelTabs/util";
+import { autoGroupAll, BasicChannelTabsProps, ChannelTabsProps, clearStaleNavigationContext, closeTab, createTab, getGroupSegments, handleChannelSwitch, isNavigationFromSource, isTabSelected, jumpToUnreadTab, moveCurrentTab, moveToTab, openedTabs, openStartupTabs, saveTabs, settings, setUpdaterFunction, ungroupAutoGroups, useGhostTabs } from "@equicordplugins/channelTabs/util";
 import { IS_MAC } from "@utils/constants";
 import { classNameFactory } from "@utils/css";
 import { classes } from "@utils/misc";
@@ -20,6 +20,7 @@ import { anyTabHasMention } from "../util/tabs";
 import BookmarkContainer, { HorizontalScroller } from "./BookmarkContainer";
 import ChannelTab, { PreviewTab } from "./ChannelTab";
 import { BasicContextMenu } from "./ContextMenus";
+import TabGroup from "./TabGroup";
 
 type TabSet = Record<string, ChannelTabsProps[]>;
 
@@ -82,7 +83,9 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
         animationQuestsActive,
         compactAutoExpandSelected,
         compactAutoExpandOnHover,
-        newTabButtonBehavior
+        newTabButtonBehavior,
+        animationGroupExpand,
+        autoGroupSameServer
     } = settings.use([
         "showBookmarkBar",
         "widerTabsAndBookmarks",
@@ -122,7 +125,9 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
         "animationQuestsActive",
         "compactAutoExpandSelected",
         "compactAutoExpandOnHover",
-        "newTabButtonBehavior"
+        "newTabButtonBehavior",
+        "animationGroupExpand",
+        "autoGroupSameServer"
     ]);
     const GhostTabs = useGhostTabs();
     const isFullscreen = useStateFromStores([], () => ChannelRTCStore.isFullscreenInContext() ?? false);
@@ -175,6 +180,12 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
     useEffect(() => {
         _update();
     }, [widerTabsAndBookmarks]);
+
+    useEffect(() => {
+        if (autoGroupSameServer) autoGroupAll();
+        else ungroupAutoGroups();
+        update();
+    }, [autoGroupSameServer]);
     useEffect(() => {
         const scroller = scrollerRef.current;
         if (!scroller) return;
@@ -356,6 +367,15 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
 
     if (isFullscreen) return null;
 
+    let tabIndex = 0;
+    const segments = getGroupSegments().map(segment => {
+        if (!("group" in segment)) return <ChannelTab {...segment} index={tabIndex++} key={segment.id} />;
+
+        const start = tabIndex;
+        tabIndex += segment.tabs.length;
+        return <TabGroup group={segment.group} tabs={segment.tabs} index={start} key={`${segment.group.id}-${segment.tabs[0].id}`} />;
+    });
+
     const shouldFollowNewTabButton = newTabButtonBehavior && !tabsOverflow;
     const query = searchQuery.trim().toLowerCase();
     const searchActive = query.length > 0;
@@ -434,7 +454,8 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
                 autoHideTabBar && cl("container-autohide"),
                 autoHideTabBar && revealOnMention && hasMention && cl("container-revealed"),
                 !compactAutoExpandSelected && cl("no-compact-auto-expand"),
-                !compactAutoExpandOnHover && cl("no-compact-hover-expand")
+                !compactAutoExpandOnHover && cl("no-compact-hover-expand"),
+                !animationGroupExpand && cl("no-group-expand-animation")
             )}
             ref={ref}
             style={{ "--tab-width-scale": tabWidthScale / 100, "--tab-height-scale": tabHeightScale / 100 } as React.CSSProperties}
@@ -449,12 +470,14 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
                     customRef={node => { scrollerRef.current = node; }}
                     className={cl("tab-scroller", shouldFollowNewTabButton && "tab-scroller-following")}
                 >
-                    {openedTabs
-                        .map((tab, i) => ({ tab, i }))
-                        .filter(({ tab }) => tab != null && (!searchActive || tabText(tab).includes(query)))
-                        .map(({ tab, i }) =>
-                            <ChannelTab {...tab} index={i} key={tab.id} searchActive={searchActive} />
-                        )}
+                    {searchActive
+                        ? openedTabs
+                            .map((tab, i) => ({ tab, i }))
+                            .filter(({ tab }) => tab != null && tabText(tab).includes(query))
+                            .map(({ tab, i }) =>
+                                <ChannelTab {...tab} index={i} key={tab.id} searchActive={searchActive} />
+                            )
+                        : segments}
                     {GhostTabs}
                     {shouldFollowNewTabButton && newTabButton}
                 </HorizontalScroller>

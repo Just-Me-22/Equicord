@@ -13,11 +13,22 @@ export interface ChannelTabsProps extends BasicChannelTabsProps {
     messageId?: string;
     pinned?: boolean;
     id: number;
+    groupId?: string;
+    escapedGroup?: boolean;
 }
+export interface TabGroup {
+    id: string;
+    name?: string;
+    guildId?: string;
+    collapsed: boolean;
+    auto: boolean;
+}
+export type TabSegment = ChannelTabsProps | { group: TabGroup; tabs: ChannelTabsProps[]; };
 export interface PersistedTabs {
     [userId: string]: {
         openTabs: ChannelTabsProps[],
         openTabIndex: number;
+        tabGroups?: TabGroup[];
     };
 }
 

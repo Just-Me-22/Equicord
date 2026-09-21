@@ -5,7 +5,7 @@
  */
 
 import { BaseText } from "@components/BaseText";
-import { ChannelTabsProps, closeTab, ensureUnreadFallbackCountsLoaded, getNotificationDotState, getUnreadFallbackCounts, guildColor, isTabSelected, moveDraggedTabs, moveToTab, openedTabs, settings, updateUnreadFallbackCounts } from "@equicordplugins/channelTabs/util";
+import { ChannelTabsProps, closeTab, ensureUnreadFallbackCountsLoaded, getNotificationDotState, getUnreadFallbackCounts, groupTabs, guildColor, isTabSelected, moveDraggedGroup, moveDraggedTabs, moveToTab, openedTabs, removeFromGroup, settings, updateUnreadFallbackCounts } from "@equicordplugins/channelTabs/util";
 import { ActivityIcon, CircleQuestionIcon, DiscoveryIcon, EnvelopeIcon, FriendsIcon, ICYMIIcon, NitroIcon, QuestIcon, ShopIcon } from "@equicordplugins/channelTabs/util/icons";
 import { getActiveAutoCompletes } from "@equicordplugins/questify/utils/completion";
 import { classNameFactory } from "@utils/css";
@@ -49,7 +49,7 @@ function XIcon({ size, fill }: { size: number, fill: string; }) {
     </svg>;
 }
 
-const GuildIcon = ({ guild }: { guild: Guild; }) => {
+export const GuildIcon = ({ guild }: { guild: Guild; }) => {
     return guild.icon
         ? <img
             src={`https://${window.GLOBAL_ENV.CDN_HOST}/icons/${guild?.id}/${guild?.icon}.png`}
@@ -315,6 +315,7 @@ export default function ChannelTab(props: ChannelTabsProps & { index: number; se
     const [isClosing, setIsClosing] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const [isDropTarget, setIsDropTarget] = useState(false);
+    const [isGroupTarget, setIsGroupTarget] = useState(false);
     const [isHovered, setIsHovered] = useState(false);
 
     const { showTabNumbers, tabNumberPosition } = settings.use(["showTabNumbers", "tabNumberPosition"]);
@@ -327,13 +328,17 @@ export default function ChannelTab(props: ChannelTabsProps & { index: number; se
     }, [isEntering]);
 
     useEffect(() => {
-        if (isDropTarget && !isDragging) {
-            const timer = setTimeout(() => setIsDropTarget(false), 100);
+        if ((isDropTarget || isGroupTarget) && !isDragging) {
+            const timer = setTimeout(() => {
+                setIsDropTarget(false);
+                setIsGroupTarget(false);
+            }, 100);
             return () => clearTimeout(timer);
         }
-    }, [isDropTarget, isDragging]);
+    }, [isDropTarget, isGroupTarget, isDragging]);
 
     const ref = useRef<HTMLDivElement>(null);
+    const groupTargetRef = useRef(false);
     const lastSwapTimeRef = useRef(0);
     const SWAP_THROTTLE_MS = 100;
 
@@ -400,15 +405,21 @@ export default function ChannelTab(props: ChannelTabsProps & { index: number; se
         collect: monitor => ({
             isDragging: !!monitor.isDragging()
         }),
-        end: () => {
+        end: (item, monitor) => {
             setIsDragging(false);
             setIsDropTarget(false);
             lastSwapTimeRef.current = 0;
+
+            if (monitor.didDrop() || !openedTabs.find(t => t.id === id)?.groupId) return;
+
+            const offset = monitor.getClientOffset();
+            const rect = ref.current?.getBoundingClientRect();
+            if (offset && rect && offset.y > rect.bottom) removeFromGroup(id, true);
         }
     }), [id, channelId, guildId, searchActive]);
     const [, drop] = useDrop(() => ({
         accept: "vc_ChannelTab",
-        hover: (item, monitor) => {
+        hover: (item: { id: number; groupId?: string; }, monitor) => {
             if (!ref.current) return;
 
             const now = Date.now();
@@ -417,10 +428,8 @@ export default function ChannelTab(props: ChannelTabsProps & { index: number; se
 
             if (draggedId === hoveredId) return;
 
-            const dragIndex = openedTabs.findIndex(t => t.id === draggedId);
             const hoverIndex = openedTabs.findIndex(t => t.id === hoveredId);
-
-            if (dragIndex === -1 || hoverIndex === -1) return;
+            if (hoverIndex === -1) return;
 
             const isOver = monitor.isOver({ shallow: true });
             setIsDropTarget(isOver);
@@ -429,40 +438,52 @@ export default function ChannelTab(props: ChannelTabsProps & { index: number; se
                 return;
             }
 
+            if (item.groupId) {
+                if (item.groupId === openedTabs[hoverIndex].groupId) return;
+                lastSwapTimeRef.current = now;
+                moveDraggedGroup(item.groupId, hoverIndex);
+                return;
+            }
+
+            const dragIndex = openedTabs.findIndex(t => t.id === draggedId);
+            if (dragIndex === -1) return;
+
             const hoverBoundingRect = ref.current.getBoundingClientRect();
             const clientOffset = monitor.getClientOffset();
             if (!clientOffset) return;
 
             const hoverClientX = clientOffset.x - hoverBoundingRect.left;
             const hoverWidth = hoverBoundingRect.right - hoverBoundingRect.left;
-            const hoverMiddleX = hoverWidth / 2;
 
-            // get tab width
-            const draggedElement = document.querySelector(".vc-channeltabs-tab-dragging") as HTMLElement;
-            const draggedWidth = draggedElement?.getBoundingClientRect().width || hoverWidth;
-            const halfDraggedWidth = draggedWidth / 2;
-
-            const hysteresis = hoverWidth * 0.05;
-
-            // When dragging RIGHT: check if right edge of dragged tab has crossed midpoint
-            if (dragIndex < hoverIndex) {
-                const draggedRightEdge = hoverClientX + halfDraggedWidth;
-                if (draggedRightEdge < hoverMiddleX + hysteresis) return;
+            // zones are measured from the cursor, not the dragged tab's edge. an edge test
+            // fires the swap the moment you touch the target, which slides it out from
+            // under you and makes the middle unreachable.
+            const groupZoneStart = hoverWidth * settings.store.groupDropZone / 200;
+            const hoveredGroupId = openedTabs[hoverIndex].groupId;
+            const inCentreBand = hoverClientX > hoverWidth / 2 - groupZoneStart && hoverClientX < hoverWidth / 2 + groupZoneStart;
+            if (inCentreBand && settings.store.groupDropZone > 0 && (!hoveredGroupId || hoveredGroupId !== openedTabs[dragIndex].groupId)) {
+                groupTargetRef.current = true;
+                setIsGroupTarget(true);
+                return;
             }
+            groupTargetRef.current = false;
+            setIsGroupTarget(false);
 
-            // When dragging LEFT: check if left edge of dragged tab has crossed midpoint
-            if (dragIndex > hoverIndex) {
-                const draggedLeftEdge = hoverClientX - halfDraggedWidth;
-                if (draggedLeftEdge > hoverMiddleX - hysteresis) return;
-            }
+            if (dragIndex < hoverIndex && hoverClientX < hoverWidth / 2 + groupZoneStart) return;
+            if (dragIndex > hoverIndex && hoverClientX > hoverWidth / 2 - groupZoneStart) return;
 
             lastSwapTimeRef.current = now;
             moveDraggedTabs(dragIndex, hoverIndex);
         },
-        drop: () => {
+        drop: (item: { id: number; groupId?: string; }) => {
             setIsDropTarget(false);
+            setIsGroupTarget(false);
+            if (!groupTargetRef.current) return;
+
+            groupTargetRef.current = false;
+            groupTabs(item.id, id);
         }
-    }), []);
+    }), [id]);
     drag(drop(ref));
 
     const hasActiveQuests = getActiveAutoCompletes().length > 0;
@@ -473,7 +494,8 @@ export default function ChannelTab(props: ChannelTabsProps & { index: number; se
             "tab-entering": isEntering,
             "tab-closing": isClosing,
             "tab-dragging": isDragging,
-            "tab-drop-target": isDropTarget,
+            "tab-drop-target": isDropTarget && !isGroupTarget,
+            "tab-group-target": isGroupTarget,
             "tab-pinned": !!props.pinned,
             "tab-nitro": channelId === "__nitro__",
             "tab-quests-active": channelId === "__quests__" && hasActiveQuests,

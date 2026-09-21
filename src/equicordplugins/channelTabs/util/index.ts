@@ -7,6 +7,7 @@
 export * from "./bookmarks";
 export * from "./constants";
 export * from "./folderIcons";
+export * from "./groups";
 export * from "./icons";
 export * from "./tabs";
 export * from "./types";

@@ -1461,3 +1461,148 @@
     margin: 4px auto;
     opacity: 1;
 }
+
+.vc-channeltabs-group {
+    position: relative;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    margin: 0 4px;
+    padding: 2px;
+    border: 1px solid var(--background-mod-muted);
+    border-radius: 14px;
+    background-color: var(--background-mod-subtle);
+    transition: border-color 0.15s ease;
+}
+
+.vc-channeltabs-group-selected {
+    border-color: var(--brand-500);
+}
+
+.vc-channeltabs-group-head {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    min-width: 0;
+}
+
+.vc-channeltabs-group-chevron {
+    display: flex;
+    align-items: center;
+    padding: 4px;
+    border-radius: 8px;
+}
+
+.vc-channeltabs-group-chevron-icon {
+    transition: transform 0.2s ease;
+}
+
+.vc-channeltabs-group-expanded .vc-channeltabs-group-chevron-icon {
+    transform: rotate(90deg);
+}
+
+.vc-channeltabs-group-label {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    max-width: calc(12rem * var(--tab-width-scale, 1));
+    padding: calc(6px * var(--tab-height-scale, 1)) 8px;
+    min-height: calc(34px * var(--tab-height-scale, 1));
+}
+
+.vc-channeltabs-group-count {
+    flex-shrink: 0;
+    padding: 0 6px;
+    border-radius: 8px;
+    background-color: var(--background-mod-subtle);
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    line-height: 1.125rem;
+}
+
+.vc-channeltabs-group-members {
+    display: grid;
+    grid-template-columns: 0fr;
+    visibility: hidden;
+    transition:
+        grid-template-columns 0.2s ease,
+        visibility 0s linear 0.2s;
+}
+
+.vc-channeltabs-group-expanded .vc-channeltabs-group-members {
+    grid-template-columns: 1fr;
+    visibility: visible;
+    transition:
+        grid-template-columns 0.2s ease,
+        visibility 0s;
+}
+
+.vc-channeltabs-group-members-inner {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.vc-channeltabs-tab-group-target {
+    border-color: var(--brand-500);
+    box-shadow: inset 0 0 0 1px var(--brand-500);
+}
+
+.vc-channeltabs-container.vc-channeltabs-no-group-expand-animation .vc-channeltabs-group-members,
+.vc-channeltabs-container.vc-channeltabs-no-group-expand-animation .vc-channeltabs-group-chevron-icon {
+    transition: none;
+}
+
+.vc-channeltabs-group-drop-target {
+    border-color: var(--brand-500);
+    box-shadow: inset 0 0 0 1px var(--brand-500);
+}
+
+.vc-channeltabs-group-label:hover {
+    background-color: var(--background-secondary-alt);
+    border-radius: 10px;
+}
+
+
+.vc-channeltabs-group-flyout {
+    position: fixed;
+    z-index: 1003;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 11rem;
+    max-height: 60vh;
+    padding: 4px;
+    border: 1px solid var(--background-mod-muted);
+    border-radius: 10px;
+
+    /* tinted from whatever the client's surface is, so it follows a theme rather than
+       picking a colour. the blur only exists while the group is hovered. */
+    background-color: color-mix(in oklab, var(--background-primary) 82%, transparent);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 4px 12px rgb(0 0 0 / 25%);
+    overflow-y: auto;
+}
+
+.vc-channeltabs-group-flyout-item {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 5px 8px;
+    border-radius: 8px;
+    text-align: left;
+}
+
+.vc-channeltabs-group-flyout-item:hover {
+    background-color: var(--background-secondary-alt);
+}
+
+.vc-channeltabs-group-flyout-item-selected {
+    background-color: var(--background-base-low);
+}

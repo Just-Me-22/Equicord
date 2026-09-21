@@ -8,8 +8,8 @@ import { BaseText } from "@components/BaseText";
 import { Heading } from "@components/Heading";
 import { BookCheckIcon, OpenExternalIcon, PencilIcon, StarFilled, StarOutlined, TrashIcon, UnsendIcon, WindowTopOutlineIcon, XLargeBoldIcon } from "@components/Icons";
 import { Paragraph } from "@components/Paragraph";
-import { bookmarkFolderColors, bookmarkPlaceholderName, closeOtherTabs, closeTab, closeTabsToTheLeft, closeTabsToTheRight, createTab, duplicateTab, getDiscordFolderIcon, getDiscordFolderIconNames, hasClosedTabs, isBookmarkFolder, openedTabs, recentlyClosedTabs, reopenClosedTab, reopenClosedTabAt, settings, toggleCompactTab, togglePin } from "@equicordplugins/channelTabs/util";
-import { Bookmark, BookmarkFolder, Bookmarks, ChannelTabsProps, UseBookmarkMethods } from "@equicordplugins/channelTabs/util/types";
+import { bookmarkFolderColors, bookmarkPlaceholderName, closeGroup, closeOtherTabs, closeTab, closeTabsToTheLeft, closeTabsToTheRight, createTab, duplicateTab, getDiscordFolderIcon, getDiscordFolderIconNames, groupLabel, hasClosedTabs, isBookmarkFolder, openedTabs, recentlyClosedTabs, removeFromGroup, renameGroup, reopenClosedTab, reopenClosedTabAt, settings, toggleCompactTab, toggleGroupCollapsed, togglePin, ungroup } from "@equicordplugins/channelTabs/util";
+import { Bookmark, BookmarkFolder, Bookmarks, ChannelTabsProps, TabGroup, UseBookmarkMethods } from "@equicordplugins/channelTabs/util/types";
 import { getIntlMessage } from "@utils/discord";
 import { Margins } from "@utils/margins";
 import { RenderModalProps } from "@vencord/discord-types";
@@ -583,6 +583,11 @@ export function TabContextMenu({ tab }: { tab: ChannelTabsProps; }) {
                         toggleCompactTab(tab.id);
                     }}
                 />
+                {tab.groupId && <Menu.MenuItem
+                    id="remove-from-group"
+                    label="Remove from Group"
+                    action={() => removeFromGroup(tab.id, true)}
+                />}
             </Menu.MenuGroup>
             {openedTabs.length !== 1 && <Menu.MenuGroup>
                 <Menu.MenuItem
@@ -650,6 +655,90 @@ export function TabContextMenu({ tab }: { tab: ChannelTabsProps; }) {
                     action={() => {
                         settings.store.showBookmarkBar = !settings.store.showBookmarkBar;
                     }}
+                />
+            </Menu.MenuGroup>
+        </Menu.Menu>
+    );
+}
+
+function RenameGroupModal({ modalProps, modalKey, group, onSave }: {
+    modalProps: RenderModalProps,
+    modalKey: string,
+    group: TabGroup,
+    onSave: (name: string) => void;
+}) {
+    const [name, setName] = useState(group.name ?? "");
+    const placeholder = groupLabel({ ...group, name: undefined });
+
+    return (
+        <Modal
+            {...modalProps}
+            size="sm"
+            title={<BaseText size="lg" weight="semibold">Rename Group</BaseText>}
+            actions={[
+                {
+                    text: "Save",
+                    variant: "primary",
+                    onClick: () => onSave(name)
+                },
+                {
+                    text: "Cancel",
+                    variant: "secondary",
+                    onClick: () => closeModal(modalKey)
+                }
+            ]}
+        >
+            <Heading className={Margins.top16}>Group Name</Heading>
+            <TextInput
+                value={name}
+                placeholder={placeholder}
+                onChange={setName}
+            />
+        </Modal>
+    );
+}
+
+export function GroupContextMenu({ group }: { group: TabGroup; }) {
+    return (
+        <Menu.Menu
+            navId="channeltabs-group-context"
+            onClose={() => FluxDispatcher.dispatch({ type: "CONTEXT_MENU_CLOSE" })}
+            aria-label="ChannelTabs Group Context Menu"
+        >
+            <Menu.MenuGroup>
+                <Menu.MenuItem
+                    id="toggle-group"
+                    label={group.collapsed ? "Expand Group" : "Collapse Group"}
+                    action={() => toggleGroupCollapsed(group.id)}
+                />
+                <Menu.MenuItem
+                    id="rename-group"
+                    label="Rename Group"
+                    action={() => {
+                        const key = openModal(modalProps =>
+                            <RenameGroupModal
+                                modalProps={modalProps}
+                                modalKey={key}
+                                group={group}
+                                onSave={name => {
+                                    renameGroup(group.id, name);
+                                    closeModal(key);
+                                }}
+                            />
+                        );
+                    }}
+                />
+            </Menu.MenuGroup>
+            <Menu.MenuGroup>
+                <Menu.MenuItem
+                    id="ungroup"
+                    label="Ungroup"
+                    action={() => ungroup(group.id)}
+                />
+                <Menu.MenuItem
+                    id="close-group"
+                    label="Close Group"
+                    action={() => closeGroup(group.id)}
                 />
             </Menu.MenuGroup>
         </Menu.Menu>
