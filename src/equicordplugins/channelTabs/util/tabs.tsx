@@ -7,7 +7,7 @@
 import { DataStore } from "@api/index";
 import { isPluginEnabled } from "@api/PluginManager";
 import { classNameFactory } from "@utils/css";
-import { NavigationRouter, SelectedChannelStore, SelectedGuildStore, showToast, Toasts, useEffect, useRef, useState } from "@webpack/common";
+import { NavigationRouter, ReadStateStore, SelectedChannelStore, SelectedGuildStore, showToast, Toasts, useEffect, useRef, useState } from "@webpack/common";
 import { JSX } from "react";
 
 import { logger, settings } from "./constants";
@@ -142,23 +142,30 @@ export function createTab(props: BasicChannelTabsProps | ChannelTabsProps, switc
     const wouldExceedLimit = isLimitEnabled && openTabs.length >= maxTabs;
 
     if (wouldExceedLimit) {
-        const currentTab = openTabs.find(t => t.id === currentlyOpenTab);
-        if (currentTab) {
-            currentTab.channelId = props.channelId;
-            currentTab.guildId = props.guildId;
-            currentTab.messageId = messageId;
-            currentTab.compact = "compact" in props ? props.compact : settings.store.openNewTabsInCompactMode;
+        // a pinned tab is never the one that gets overwritten, so the limit falls on the
+        // current tab first and then on the newest unpinned one
+        const victim = openTabs.find(t => t.id === currentlyOpenTab && !t.pinned)
+            ?? [...openTabs].reverse().find(t => !t.pinned);
+
+        // with every tab pinned there is nothing to overwrite, so the new one is allowed
+        // through rather than the navigation being silently dropped
+        if (victim) {
+            victim.channelId = props.channelId;
+            victim.guildId = props.guildId;
+            victim.messageId = messageId;
+            victim.compact = "compact" in props ? props.compact : settings.store.openNewTabsInCompactMode;
             if (switchToTab) {
                 update(save);
             } else {
-                moveToTab(currentTab.id);
+                moveToTab(victim.id);
             }
+            return;
         }
-        return;
     }
 
     const id = genId();
     openTabs.push({ ...props, id, messageId, compact: "compact" in props ? props.compact : settings.store.openNewTabsInCompactMode });
+    stabilisePins();
     if (switchToTab) moveToTab(id);
     clearGhostTabs();
     update(save);
@@ -285,7 +292,7 @@ export function handleChannelSwitch(ch: BasicChannelTabsProps) {
         if (isRapidNavigation && settings.store.enableRapidNavigation) {
             // Replace current tab content instead of creating new one
             const currentTab = openTabs.find(t => t.id === currentlyOpenTab);
-            if (currentTab && currentTab.channelId !== ch.channelId) {
+            if (currentTab && !currentTab.pinned && currentTab.channelId !== ch.channelId) {
                 currentTab.channelId = ch.channelId;
                 currentTab.guildId = ch.guildId;
                 update();
@@ -302,9 +309,44 @@ export function handleChannelSwitch(ch: BasicChannelTabsProps) {
 
     // Default behavior: replace current tab content
     if (tab && tab.channelId !== ch.channelId) {
+        // a pinned tab keeps its channel, so navigating away from one opens a tab rather
+        // than quietly turning the pinned tab into something else
+        if (tab.pinned) {
+            createTab(ch, true);
+            return;
+        }
+
         openTabs[openTabs.indexOf(tab)] = { id: tab.id, compact: tab.compact, ...ch };
         update();
     }
+}
+
+/** pinned tabs sit at the front, so the order in the bar always matches what pinning did */
+function stabilisePins() {
+    if (!openTabs.some(tab => tab.pinned)) return;
+    replaceArray(openTabs, ...openTabs.filter(tab => tab.pinned), ...openTabs.filter(tab => !tab.pinned));
+}
+
+export function togglePin(id: number) {
+    const tab = openTabs.find(v => v.id === id);
+    if (!tab) return logger.error("Couldn't find channel tab with ID " + id, openTabs);
+
+    tab.pinned = !tab.pinned;
+    stabilisePins();
+    update();
+}
+
+/** mentions first, because a mention sitting behind five busy channels is the one you
+ *  actually wanted to reach */
+export function jumpToUnreadTab() {
+    const start = Math.max(openTabs.findIndex(tab => tab.id === currentlyOpenTab), 0);
+    const fromHere = openTabs.map((_, i) => openTabs[(start + 1 + i) % openTabs.length]);
+    const unread = fromHere.filter(tab => tab.id !== currentlyOpenTab && ReadStateStore.hasUnread(tab.channelId));
+
+    const target = unread.find(tab => ReadStateStore.getMentionCount(tab.channelId) > 0) ?? unread[0];
+    if (target) moveToTab(target.id);
+
+    return !!target;
 }
 
 export function hasClosedTabs() {
@@ -319,6 +361,29 @@ export function isTabSelected(id: number) {
     return id === currentlyOpenTab;
 }
 
+export function currentTabsSnapshot() {
+    return {
+        openTabs: openTabs.map(tab => ({ ...tab })),
+        openTabIndex: Math.max(openTabs.findIndex(tab => tab.id === currentlyOpenTab), 0)
+    };
+}
+
+export function replaceTabsWith(saved: PersistedTabs[string] | undefined) {
+    if (!saved?.openTabs?.length) return false;
+
+    replaceArray(openTabs);
+    replaceArray(closedTabs);
+    replaceArray(openTabHistory);
+    clearTabState();
+    highestIdIndex = 0;
+
+    saved.openTabs.forEach(tab => createTab(tab, false, tab.messageId, false));
+    moveToTab((openTabs[saved.openTabIndex] ?? openTabs[0]).id);
+    update();
+
+    return true;
+}
+
 export function moveDraggedTabs(index1: number, index2: number) {
     if (index1 < 0 || index1 >= openTabs.length || index2 < 0 || index2 >= openTabs.length)
         return logger.error(`Out of bounds drag (swap between indexes ${index1} and ${index2})`, openTabs);
@@ -327,6 +392,7 @@ export function moveDraggedTabs(index1: number, index2: number) {
     if (!firstItem) return logger.error(`Tab at index ${index1} is undefined`, openTabs);
 
     openTabs.splice(index2, 0, firstItem);
+    stabilisePins();
     update();
 }
 
@@ -461,6 +527,38 @@ export async function openStartupTabs(props: BasicChannelTabsProps & { userId: s
     hydratedUserId = userId;
     setUserId(userId);
     moveToTab(currentlyOpenTab);
+}
+
+/** newest first, which is the order a menu wants to list them in */
+export function recentlyClosedTabs() {
+    return [...closedTabs].reverse();
+}
+
+export function reopenClosedTabAt(index: number) {
+    const i = closedTabs.length - 1 - index;
+    if (i < 0 || i >= closedTabs.length) return;
+
+    const [tab] = closedTabs.splice(i, 1);
+    createTab(tab, true, tab.messageId, true, true);
+}
+
+export function duplicateTab(id: number) {
+    const tab = openTabs.find(v => v.id === id);
+    if (!tab) return logger.error("Couldn't find channel tab with ID " + id, openTabs);
+
+    createTab({ guildId: tab.guildId, channelId: tab.channelId }, true, tab.messageId, true, true);
+}
+
+export function moveCurrentTab(by: number) {
+    const from = openTabs.findIndex(tab => tab.id === currentlyOpenTab);
+    const to = from + by;
+    if (from === -1 || to < 0 || to >= openTabs.length) return;
+
+    moveDraggedTabs(from, to);
+}
+
+export function anyTabHasMention() {
+    return openTabs.some(tab => ReadStateStore.getMentionCount(tab.channelId) > 0);
 }
 
 export function reopenClosedTab() {

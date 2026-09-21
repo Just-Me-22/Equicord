@@ -8,12 +8,27 @@ import { BaseText } from "@components/BaseText";
 import { Heading } from "@components/Heading";
 import { BookCheckIcon, OpenExternalIcon, PencilIcon, StarFilled, StarOutlined, TrashIcon, UnsendIcon, WindowTopOutlineIcon, XLargeBoldIcon } from "@components/Icons";
 import { Paragraph } from "@components/Paragraph";
-import { bookmarkFolderColors, bookmarkPlaceholderName, closeOtherTabs, closeTab, closeTabsToTheLeft, closeTabsToTheRight, createTab, getDiscordFolderIcon, getDiscordFolderIconNames, hasClosedTabs, isBookmarkFolder, openedTabs, reopenClosedTab, settings, toggleCompactTab } from "@equicordplugins/channelTabs/util";
+import { bookmarkFolderColors, bookmarkPlaceholderName, closeOtherTabs, closeTab, closeTabsToTheLeft, closeTabsToTheRight, createTab, duplicateTab, getDiscordFolderIcon, getDiscordFolderIconNames, hasClosedTabs, isBookmarkFolder, openedTabs, recentlyClosedTabs, reopenClosedTab, reopenClosedTabAt, settings, toggleCompactTab, togglePin } from "@equicordplugins/channelTabs/util";
 import { Bookmark, BookmarkFolder, Bookmarks, ChannelTabsProps, UseBookmarkMethods } from "@equicordplugins/channelTabs/util/types";
 import { getIntlMessage } from "@utils/discord";
 import { Margins } from "@utils/margins";
 import { RenderModalProps } from "@vencord/discord-types";
 import { Button, ChannelStore, closeModal, ColorPicker, FluxDispatcher, Menu, Modal, openModal, ReadStateStore, ReadStateUtils, Select, TextInput, useMemo, useState } from "@webpack/common";
+
+/** discord does not export a pin icon, and matching one out of webpack by its path data
+ *  breaks on their next build, so this is drawn here */
+const PinIcon = (props: { width?: number; height?: number; className?: string; }) => (
+    <svg
+        width={props.width ?? 18}
+        height={props.height ?? 18}
+        className={props.className}
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        aria-hidden="true"
+    >
+        <path d="M10 3h4v6l3 3v2h-4v7h-2v-7H7v-2l3-3V3Z" />
+    </svg>
+);
 
 const legacyFolderColors: Record<string, string> = {
     "var(--channeltabs-red)": bookmarkFolderColors.Red,
@@ -550,6 +565,14 @@ export function TabContextMenu({ tab }: { tab: ChannelTabsProps; }) {
                     />
                 }
                 <Menu.MenuCheckboxItem
+                    checked={!!tab.pinned}
+                    id="toggle-pin-tab"
+                    label="Pin Tab"
+                    icon={PinIcon}
+                    leadingAccessory={{ type: "icon", icon: PinIcon }}
+                    action={() => togglePin(tab.id)}
+                />
+                <Menu.MenuCheckboxItem
                     checked={compact}
                     id="toggle-compact-tab"
                     label="Compact"
@@ -568,6 +591,13 @@ export function TabContextMenu({ tab }: { tab: ChannelTabsProps; }) {
                     icon={XLargeBoldIcon}
                     leadingAccessory={{ type: "icon", icon: XLargeBoldIcon }}
                     action={() => closeTab(tab.id)}
+                />
+                <Menu.MenuItem
+                    id="duplicate-tab"
+                    label="Duplicate Tab"
+                    icon={OpenExternalIcon}
+                    leadingAccessory={{ type: "icon", icon: OpenExternalIcon }}
+                    action={() => duplicateTab(tab.id)}
                 />
                 <Menu.MenuItem
                     id="close-other-tabs"
@@ -599,7 +629,16 @@ export function TabContextMenu({ tab }: { tab: ChannelTabsProps; }) {
                     leadingAccessory={{ type: "icon", icon: UnsendIcon }}
                     disabled={!hasClosedTabs()}
                     action={() => reopenClosedTab()}
-                />
+                >
+                    {recentlyClosedTabs().slice(0, 10).map((closed, i) => (
+                        <Menu.MenuItem
+                            key={`${closed.channelId}-${i}`}
+                            id={`reopen-closed-tab-${i}`}
+                            label={ChannelStore.getChannel(closed.channelId)?.name || "Unknown channel"}
+                            action={() => reopenClosedTabAt(i)}
+                        />
+                    ))}
+                </Menu.MenuItem>
             </Menu.MenuGroup>}
             <Menu.MenuGroup>
                 <Menu.MenuCheckboxItem

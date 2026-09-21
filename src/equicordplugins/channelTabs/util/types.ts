@@ -11,6 +11,7 @@ export type BasicChannelTabsProps = {
 export interface ChannelTabsProps extends BasicChannelTabsProps {
     compact: boolean;
     messageId?: string;
+    pinned?: boolean;
     id: number;
 }
 export interface PersistedTabs {

@@ -5,13 +5,16 @@
  */
 
 import { definePluginSettings } from "@api/Settings";
+import { Flex } from "@components/Flex";
 import { Heading } from "@components/Heading";
 import { Paragraph } from "@components/Paragraph";
 import { ChannelTabsPreview } from "@equicordplugins/channelTabs/components/ChannelTabsContainer";
 import { KeybindSettings } from "@equicordplugins/channelTabs/components/KeybindSettings";
+import { currentTabsSnapshot, replaceTabsWith } from "@equicordplugins/channelTabs/util/tabs";
+import { PersistedTabs } from "@equicordplugins/channelTabs/util/types";
 import { Logger } from "@utils/Logger";
 import { makeRange, OptionType } from "@utils/types";
-import { SearchableSelect, useState } from "@webpack/common";
+import { Button, SearchableSelect, showToast, Toasts, UserStore, useState } from "@webpack/common";
 import { JSX } from "react";
 
 interface DynamicDropdownSettingOption {
@@ -105,6 +108,44 @@ function AnimationSettings(): JSX.Element {
     );
 }
 
+function TabSyncSettings(): JSX.Element {
+    const userId = UserStore.getCurrentUser()?.id;
+    const saved = userId ? settings.store.syncedTabs?.[userId] : undefined;
+    const [savedAt, setSavedAt] = useState<number | undefined>(saved?.at);
+
+    return (
+        <section>
+            <Heading>Tabs on other machines</Heading>
+            <Paragraph>
+                {savedAt
+                    ? `Last sent up ${new Date(savedAt).toLocaleString()}. Pulling replaces the tabs open here.`
+                    : "Nothing sent up yet. These ride along with Equicord's cloud settings, so turn those on first."}
+            </Paragraph>
+            <Flex flexDirection="row" style={{ gap: "8px", marginTop: "8px" }}>
+                <Button
+                    disabled={!userId}
+                    onClick={() => {
+                        if (!userId) return;
+                        const at = Date.now();
+                        settings.store.syncedTabs = { ...settings.store.syncedTabs, [userId]: { ...currentTabsSnapshot(), at } };
+                        setSavedAt(at);
+                        showToast("Tabs sent up", Toasts.Type.SUCCESS);
+                    }}
+                >Send these tabs up</Button>
+                <Button
+                    color={Button.Colors.PRIMARY}
+                    disabled={!savedAt}
+                    onClick={() => {
+                        if (!userId) return;
+                        const ok = replaceTabsWith(settings.store.syncedTabs?.[userId]);
+                        showToast(ok ? "Tabs pulled down" : "Nothing saved to pull", ok ? Toasts.Type.SUCCESS : Toasts.Type.FAILURE);
+                    }}
+                >Pull the saved tabs down</Button>
+            </Flex>
+        </section>
+    );
+}
+
 export const logger = new Logger("ChannelTabs");
 
 export const bookmarkFolderColors = {
@@ -117,6 +158,23 @@ export const bookmarkFolderColors = {
     Orange: "#e67e22",
     Pink: "#ff73fa"
 } as const;
+
+/** black and white are fine on a folder icon and unreadable as a border, so a server
+ *  never gets one */
+const guildColors = Object.entries(bookmarkFolderColors)
+    .filter(([name]) => name !== "Black" && name !== "White")
+    .map(([, hex]) => hex);
+
+/** picked from the id rather than stored, so a server keeps its colour across sessions
+ *  and machines without anything to migrate */
+export function guildColor(guildId: string | undefined): string | undefined {
+    if (!guildId || guildId === "@me") return undefined;
+
+    let hash = 0;
+    for (const char of guildId) hash = (hash * 31 + char.charCodeAt(0)) | 0;
+
+    return guildColors[Math.abs(hash) % guildColors.length];
+}
 
 export const settings = definePluginSettings({
     onStartup: {
@@ -138,6 +196,64 @@ export const settings = definePluginSettings({
         component: ChannelTabsPreview,
         type: OptionType.COMPONENT,
         default: {}
+    },
+    tabSync: {
+        type: OptionType.COMPONENT,
+        description: "",
+        component: TabSyncSettings
+    },
+    syncedTabs: {
+        type: OptionType.CUSTOM,
+        description: "",
+        default: {} as Record<string, PersistedTabs[string] & { at: number; }>
+    },
+    autoHideTabBar: {
+        type: OptionType.BOOLEAN,
+        description: "Collapse the tab row until you hover the bar",
+        default: false,
+        restartNeeded: false
+    },
+    revealOnMention: {
+        type: OptionType.BOOLEAN,
+        description: "Reveal the collapsed tab row while a tab has a mention",
+        default: true,
+        restartNeeded: false
+    },
+    enableMoveTabShortcut: {
+        type: OptionType.BOOLEAN,
+        description: "Enable the move current tab shortcuts",
+        default: true,
+        restartNeeded: false
+    },
+    moveTabLeftKeybind: {
+        type: OptionType.STRING,
+        description: "Keyboard shortcut to move the current tab left",
+        default: "CTRL+SHIFT+PAGEUP",
+        restartNeeded: false
+    },
+    moveTabRightKeybind: {
+        type: OptionType.STRING,
+        description: "Keyboard shortcut to move the current tab right",
+        default: "CTRL+SHIFT+PAGEDOWN",
+        restartNeeded: false
+    },
+    enableUnreadJumpShortcut: {
+        type: OptionType.BOOLEAN,
+        description: "Enable the jump to next unread tab shortcut",
+        default: true,
+        restartNeeded: false
+    },
+    unreadJumpKeybind: {
+        type: OptionType.STRING,
+        description: "Keyboard shortcut to jump to the next tab with unreads",
+        default: "CTRL+SHIFT+U",
+        restartNeeded: false
+    },
+    colorTabsByServer: {
+        description: "Tint each tab's border with a colour derived from its server",
+        type: OptionType.BOOLEAN,
+        default: false,
+        restartNeeded: false
     },
     showStatusIndicators: {
         description: "Show status indicators for DM's",

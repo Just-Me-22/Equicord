@@ -64,6 +64,11 @@
     padding: 4px;
     display: flex;
     flex-direction: column-reverse;
+
+    /* the parent is a flex column that clips, so without this the bar is squeezed from
+       its own height down to whatever the app leaves over, and the rows collapse inside
+       it. the chat above is the thing that should give way, not the bar. */
+    flex-shrink: 0;
     -webkit-app-region: no-drag;
     background-color: var(--background-primary);
     box-shadow: inset 0 1px 0 var(--background-base-low);
@@ -149,7 +154,7 @@
     fill: none;
     stroke: var(--text-muted);
     stroke-width: 0.075rem;
-    transition: all 0.15s ease;
+    transition: fill 0.15s ease, stroke 0.15s ease;
 }
 
 .vc-channeltabs-bookmark-star:hover {
@@ -208,7 +213,7 @@
     width: calc(12rem * var(--tab-width-scale, 1));
     min-width: 0;
     margin: 0 4px;
-    background-color: transparent;
+    background-color: color-mix(in srgb, var(--vc-channeltabs-guild, transparent) 14%, transparent);
     border: 1px solid var(--background-mod-muted);
     transition:
         transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
@@ -270,7 +275,6 @@
 .vc-channeltabs-tab-compact {
     width: auto;
     min-width: calc(3rem * var(--tab-width-scale, 1));
-    transition: all 0.4s ease-out;
 }
 
 .vc-channeltabs-tab-compact .vc-channeltabs-tab-inner {
@@ -304,7 +308,7 @@
 
 .vc-channeltabs-tab-selected {
     transform: translateY(-1px);
-    background-color: var(--background-base-low);
+    background-color: color-mix(in srgb, var(--vc-channeltabs-guild, transparent) 26%, var(--background-base-low));
     border: 1px solid var(--main-color, var(--brand-experiment, var(--brand-500)));
     border-bottom: 2px solid var(--main-color, var(--brand-experiment, var(--brand-500)));
     box-shadow: 0 1px 3px rgb(0 0 0 / 20%);
@@ -363,7 +367,7 @@
 .vc-channeltabs-hoverable:hover,
 .vc-channeltabs-tab:hover:not(.vc-channeltabs-tab-selected) {
     transform: translateY(-1px) scale(1.02);
-    background-color: var(--background-secondary-alt);
+    background-color: color-mix(in srgb, var(--vc-channeltabs-guild, transparent) 22%, var(--background-secondary-alt));
     border-color: var(--hover-color, var(--border-subtle));
     box-shadow: 0 2px 4px rgb(0 0 0 / 10%);
 }
@@ -378,7 +382,8 @@
     color: var(--text-default);
 }
 
-.vc-channeltabs-bookmark-search-shell {
+.vc-channeltabs-bookmark-search-shell,
+.vc-channeltabs-tab-search-shell {
     position: relative;
     width: 28px;
     height: 28px;
@@ -386,11 +391,13 @@
     flex-shrink: 0;
 }
 
-.vc-channeltabs-bookmark-search-shell-open {
+.vc-channeltabs-bookmark-search-shell-open,
+.vc-channeltabs-tab-search-shell-open {
     z-index: 3;
 }
 
-.vc-channeltabs-bookmark-search-field {
+.vc-channeltabs-bookmark-search-field,
+.vc-channeltabs-tab-search-field {
     position: absolute;
     right: 0;
     top: 50%;
@@ -403,18 +410,21 @@
     transition: width 0.18s ease, opacity 0.15s ease, transform 0.18s ease;
 }
 
-.vc-channeltabs-bookmark-search-shell-open .vc-channeltabs-bookmark-search-field {
+.vc-channeltabs-bookmark-search-shell-open .vc-channeltabs-bookmark-search-field,
+.vc-channeltabs-tab-search-shell-open .vc-channeltabs-tab-search-field {
     width: 160px;
     opacity: 1;
     pointer-events: auto;
     transform: translateY(-50%) scaleX(1);
 }
 
-.vc-channeltabs-bookmark-search-input {
+.vc-channeltabs-bookmark-search-input,
+.vc-channeltabs-tab-search-input {
     padding-right: 34px !important;
 }
 
-.vc-channeltabs-bookmark-search-button {
+.vc-channeltabs-bookmark-search-button,
+.vc-channeltabs-tab-search-button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -429,7 +439,8 @@
     transition: color 0.15s ease;
 }
 
-.vc-channeltabs-bookmark-search-button:hover {
+.vc-channeltabs-bookmark-search-button:hover,
+.vc-channeltabs-tab-search-button:hover {
     color: var(--interactive-icon-hover);
 }
 
@@ -438,7 +449,7 @@
     margin: 0 4px;
     border-radius: 4px;
     background-color: var(--background-base-low);
-    transition: all 0.2s ease;
+    transition: background-color 0.2s ease, transform 0.2s ease;
     flex-shrink: 0;
 }
 
@@ -453,7 +464,7 @@
 
 /* stylelint-disable-next-line no-descending-specificity */
 .vc-channeltabs-new-button svg {
-    transition: all 0.2s ease;
+    transition: color 0.2s ease;
 }
 
 .vc-channeltabs-new-button:hover svg {
@@ -481,7 +492,10 @@
     margin: 0 0 0 4px;
     border-radius: 50%;
     color: var(--text-muted);
-    transition: all 0.15s ease, transform 0.2s ease-in-out;
+    transition:
+        color 0.15s ease,
+        background-color 0.15s ease,
+        transform 0.2s ease-in-out;
 }
 
 .vc-channeltabs-close-button:hover {
@@ -908,10 +922,6 @@
     }
 }
 
-.vc-channeltabs-tab-container {
-    transition: all 0.2s ease-out;
-}
-
 /* animation override settings */
 /* stylelint-disable no-descending-specificity */
 
@@ -1226,7 +1236,13 @@
     font-family: var(--font-code);
     font-weight: 600;
     color: var(--text-strong);
-    transition: all 0.2s ease;
+    transition:
+        background-color 0.2s ease,
+        border-color 0.2s ease,
+        color 0.2s ease,
+        box-shadow 0.2s ease,
+        transform 0.2s ease,
+        opacity 0.2s ease;
     outline: none;
     box-shadow: 0 0 0 1px var(--background-mod-muted);
 }
@@ -1378,4 +1394,70 @@
         animation: none !important;
         transition: none !important;
     }
+}
+
+/* a pinned tab is the icon only, sitting at the front like a browser's */
+.vc-channeltabs-tab-pinned {
+    width: auto;
+    min-width: calc(2.75rem * var(--tab-width-scale, 1));
+    flex-shrink: 0;
+}
+
+.vc-channeltabs-tab-pinned .vc-channeltabs-name-text {
+    display: none;
+}
+
+.vc-channeltabs-tab-pinned .vc-channeltabs-close-button {
+    display: none;
+}
+
+.vc-channeltabs-tab-pinned .vc-channeltabs-tab-inner {
+    padding-right: 0;
+    justify-content: center;
+}
+
+/* everything below mirrors the bar when it sits at the bottom. the tab shapes are drawn
+   for a bar at the top: they lift upwards, the selected one carries its accent along its
+   bottom edge and drops a shadow downwards. against the bottom of the window all three
+   point the wrong way. */
+.vc-channeltabs-container:not(.vc-channeltabs-container-top) .vc-channeltabs-tab-selected {
+    transform: translateY(1px);
+    border-top: 2px solid var(--main-color, var(--brand-experiment, var(--brand-500)));
+    border-bottom: 1px solid var(--main-color, var(--brand-experiment, var(--brand-500)));
+    box-shadow: 0 -1px 3px rgb(0 0 0 / 20%);
+}
+
+.vc-channeltabs-container:not(.vc-channeltabs-container-top) .vc-channeltabs-tab:hover:not(.vc-channeltabs-tab-selected) {
+    transform: translateY(1px) scale(1.02);
+    box-shadow: 0 -2px 4px rgb(0 0 0 / 10%);
+}
+
+.vc-channeltabs-container:not(.vc-channeltabs-container-top).vc-channeltabs-no-selected-border .vc-channeltabs-tab-selected {
+    border-top: 1px solid var(--background-mod-muted) !important;
+}
+
+/* collapsed until you hover the bar, or until a tab wants your attention */
+.vc-channeltabs-container-autohide .vc-channeltabs-tab-container,
+.vc-channeltabs-container-autohide .vc-channeltabs-separator {
+    height: 0;
+    margin: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition:
+        height 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+        margin 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+        opacity 0.2s ease;
+}
+
+.vc-channeltabs-container-autohide:hover .vc-channeltabs-tab-container,
+.vc-channeltabs-container-revealed .vc-channeltabs-tab-container {
+    height: calc(44px * var(--tab-height-scale, 1));
+    opacity: 1;
+}
+
+.vc-channeltabs-container-autohide:hover .vc-channeltabs-separator,
+.vc-channeltabs-container-revealed .vc-channeltabs-separator {
+    height: 1px;
+    margin: 4px auto;
+    opacity: 1;
 }

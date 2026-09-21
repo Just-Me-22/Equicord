@@ -5,7 +5,7 @@
  */
 
 import { BaseText } from "@components/BaseText";
-import { ChannelTabsProps, closeTab, ensureUnreadFallbackCountsLoaded, getNotificationDotState, getUnreadFallbackCounts, isTabSelected, moveDraggedTabs, moveToTab, openedTabs, settings, updateUnreadFallbackCounts } from "@equicordplugins/channelTabs/util";
+import { ChannelTabsProps, closeTab, ensureUnreadFallbackCountsLoaded, getNotificationDotState, getUnreadFallbackCounts, guildColor, isTabSelected, moveDraggedTabs, moveToTab, openedTabs, settings, updateUnreadFallbackCounts } from "@equicordplugins/channelTabs/util";
 import { ActivityIcon, CircleQuestionIcon, DiscoveryIcon, EnvelopeIcon, FriendsIcon, ICYMIIcon, NitroIcon, QuestIcon, ShopIcon } from "@equicordplugins/channelTabs/util/icons";
 import { getActiveAutoCompletes } from "@equicordplugins/questify/utils/completion";
 import { classNameFactory } from "@utils/css";
@@ -306,8 +306,8 @@ function ChannelTabContent(props: ChannelTabsProps & {
     );
 }
 
-export default function ChannelTab(props: ChannelTabsProps & { index: number; }) {
-    const { channelId, guildId, id, index, compact } = props;
+export default function ChannelTab(props: ChannelTabsProps & { index: number; searchActive?: boolean; }) {
+    const { channelId, guildId, id, index, compact, searchActive } = props;
     const guild = GuildStore.getGuild(guildId);
     const channel = ChannelStore.getChannel(channelId);
 
@@ -383,6 +383,7 @@ export default function ChannelTab(props: ChannelTabsProps & { index: number; })
 
     const [, drag] = useDrag(() => ({
         type: "vc_ChannelTab",
+        canDrag: () => !searchActive,
         item: () => {
             setIsDragging(true);
             lastSwapTimeRef.current = Date.now() - SWAP_THROTTLE_MS;
@@ -404,7 +405,7 @@ export default function ChannelTab(props: ChannelTabsProps & { index: number; })
             setIsDropTarget(false);
             lastSwapTimeRef.current = 0;
         }
-    }), [id, channelId, guildId]);
+    }), [id, channelId, guildId, searchActive]);
     const [, drop] = useDrop(() => ({
         accept: "vc_ChannelTab",
         hover: (item, monitor) => {
@@ -473,12 +474,17 @@ export default function ChannelTab(props: ChannelTabsProps & { index: number; })
             "tab-closing": isClosing,
             "tab-dragging": isDragging,
             "tab-drop-target": isDropTarget,
+            "tab-pinned": !!props.pinned,
             "tab-nitro": channelId === "__nitro__",
             "tab-quests-active": channelId === "__quests__" && hasActiveQuests,
             wider: settings.store.widerTabsAndBookmarks
         })}
         key={index}
         ref={ref}
+        title={[guild?.name, channel?.name].filter(Boolean).join(" / ") || undefined}
+        style={settings.store.colorTabsByServer
+            ? { "--vc-channeltabs-guild": guildColor(guildId) } as React.CSSProperties
+            : undefined}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         onAuxClick={e => {

@@ -7,15 +7,16 @@
 import { Flex } from "@components/Flex";
 import { Heading } from "@components/Heading";
 import { Paragraph } from "@components/Paragraph";
-import { BasicChannelTabsProps, ChannelTabsProps, clearStaleNavigationContext, closeTab, createTab, handleChannelSwitch, isNavigationFromSource, isTabSelected, moveToTab, openedTabs, openStartupTabs, saveTabs, settings, setUpdaterFunction, useGhostTabs } from "@equicordplugins/channelTabs/util";
+import { BasicChannelTabsProps, ChannelTabsProps, clearStaleNavigationContext, closeTab, createTab, handleChannelSwitch, isNavigationFromSource, isTabSelected, jumpToUnreadTab, moveCurrentTab, moveToTab, openedTabs, openStartupTabs, saveTabs, settings, setUpdaterFunction, useGhostTabs } from "@equicordplugins/channelTabs/util";
 import { IS_MAC } from "@utils/constants";
 import { classNameFactory } from "@utils/css";
 import { classes } from "@utils/misc";
 import { useForceUpdater } from "@utils/react";
 import { findComponentByCodeLazy } from "@webpack";
-import { Button, ChannelRTCStore, ContextMenuApi, FluxDispatcher, useCallback, useEffect, useRef, UserStore, useState, useStateFromStores } from "@webpack/common";
+import { Button, ChannelRTCStore, ChannelStore, ContextMenuApi, FluxDispatcher, GuildStore, ReadStateStore, TextInput, Tooltip, useCallback, useEffect, useRef, UserStore, useState, useStateFromStores } from "@webpack/common";
 
 import channelTabs from "..";
+import { anyTabHasMention } from "../util/tabs";
 import BookmarkContainer, { HorizontalScroller } from "./BookmarkContainer";
 import ChannelTab, { PreviewTab } from "./ChannelTab";
 import { BasicContextMenu } from "./ContextMenus";
@@ -26,8 +27,21 @@ const PlusSmallIcon = findComponentByCodeLazy("0v-5h5a1");
 
 const cl = classNameFactory("vc-channeltabs-");
 
+/** a dm has no name of its own, so it is searched by who is in it */
+function tabText(tab: ChannelTabsProps): string {
+    const channel = ChannelStore.getChannel(tab.channelId);
+    const parts: (string | null | undefined)[] = [channel?.name, GuildStore.getGuild(tab.guildId)?.name];
+
+    for (const one of channel?.rawRecipients ?? []) parts.push(one.username, one.global_name);
+
+    return parts.filter(Boolean).join(" ").toLowerCase();
+}
+
 export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
     const [userId, setUserId] = useState("");
+    const [isSearchOpen, setIsSearchOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState("");
+    const searchInputRef = useRef<HTMLInputElement>(null);
     const [tabsOverflow, setTabsOverflow] = useState(false);
     const {
         showBookmarkBar,
@@ -39,6 +53,13 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
         enableCloseTabShortcut,
         enableNewTabShortcut,
         enableTabCycleShortcut,
+        enableMoveTabShortcut,
+        moveTabLeftKeybind,
+        moveTabRightKeybind,
+        autoHideTabBar,
+        revealOnMention,
+        enableUnreadJumpShortcut,
+        unreadJumpKeybind,
         closeTabKeybind,
         newTabKeybind,
         cycleTabForwardKeybind,
@@ -72,6 +93,13 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
         "enableCloseTabShortcut",
         "enableNewTabShortcut",
         "enableTabCycleShortcut",
+        "enableMoveTabShortcut",
+        "moveTabLeftKeybind",
+        "moveTabRightKeybind",
+        "autoHideTabBar",
+        "revealOnMention",
+        "enableUnreadJumpShortcut",
+        "unreadJumpKeybind",
         "closeTabKeybind",
         "newTabKeybind",
         "cycleTabForwardKeybind",
@@ -98,6 +126,12 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
     ]);
     const GhostTabs = useGhostTabs();
     const isFullscreen = useStateFromStores([], () => ChannelRTCStore.isFullscreenInContext() ?? false);
+    const hasMention = useStateFromStores([ReadStateStore], () => anyTabHasMention());
+
+    useEffect(() => {
+        if (!isSearchOpen) return;
+        searchInputRef.current?.focus();
+    }, [isSearchOpen]);
 
     const _update = useForceUpdater();
     const update = useCallback((save = true) => {
@@ -213,7 +247,28 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
                 }
             }
 
-            // 2. close tab shortcut (default: CTRL+W)
+            // 2. move the current tab along the bar
+            if (enableMoveTabShortcut && matchesKeybind(event, moveTabLeftKeybind)) {
+                event.preventDefault();
+                moveCurrentTab(-1);
+                return;
+            }
+
+            if (enableMoveTabShortcut && matchesKeybind(event, moveTabRightKeybind)) {
+                event.preventDefault();
+                moveCurrentTab(1);
+                return;
+            }
+
+            // 3. jump to the next unread tab (default: CTRL+SHIFT+U)
+            if (enableUnreadJumpShortcut && matchesKeybind(event, unreadJumpKeybind)) {
+                event.preventDefault();
+                event.stopPropagation();
+                jumpToUnreadTab();
+                return;
+            }
+
+            // 3. close tab shortcut (default: CTRL+W)
             if (enableCloseTabShortcut && matchesKeybind(event, closeTabKeybind)) {
                 event.preventDefault();
                 const currentTab = openedTabs.find(t => isTabSelected(t.id));
@@ -271,6 +326,11 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
         enableTabCycleShortcut,
         cycleTabForwardKeybind,
         cycleTabBackwardKeybind,
+        enableUnreadJumpShortcut,
+        unreadJumpKeybind,
+        enableMoveTabShortcut,
+        moveTabLeftKeybind,
+        moveTabRightKeybind,
         props,
         openedTabs
     ]);
@@ -297,6 +357,50 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
     if (isFullscreen) return null;
 
     const shouldFollowNewTabButton = newTabButtonBehavior && !tabsOverflow;
+    const query = searchQuery.trim().toLowerCase();
+    const searchActive = query.length > 0;
+
+    const searchBox = (
+        <div className={classes(cl("tab-search-shell"), isSearchOpen && cl("tab-search-shell-open"))}>
+            <div className={cl("tab-search-field")}>
+                <TextInput
+                    inputRef={searchInputRef}
+                    inputClassName={cl("tab-search-input")}
+                    style={{ width: "100%" }}
+                    value={searchQuery}
+                    onChange={setSearchQuery}
+                    placeholder="Search tabs"
+                    onBlur={() => {
+                        if (!searchQuery.trim()) setIsSearchOpen(false);
+                    }}
+                    onKeyDown={e => {
+                        if (e.key !== "Escape") return;
+                        if (searchQuery.trim()) setSearchQuery("");
+                        else setIsSearchOpen(false);
+                    }}
+                />
+            </div>
+            <Tooltip text="Search tabs" position="left">
+                {p => <button
+                    className={classes(cl("button"), cl("tab-search-button"))}
+                    {...p}
+                    onClick={() => {
+                        if (isSearchOpen && !searchQuery.trim()) {
+                            setIsSearchOpen(false);
+                            return;
+                        }
+                        setIsSearchOpen(true);
+                    }}
+                >
+                    <svg width={20} height={20} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <circle cx="11" cy="11" r="6.5" stroke="currentColor" strokeWidth="2" />
+                        <path d="m16 16 4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    </svg>
+                </button>}
+            </Tooltip>
+        </div>
+    );
+
     const newTabButton = (
         <button
             onClick={() => createTab(props, true)}
@@ -327,6 +431,8 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
                 !animationTabPositioning && cl("no-tab-positioning"),
                 !animationResizeHandle && cl("no-resize-handle-animation"),
                 !animationQuestsActive && cl("no-quests-active-animation"),
+                autoHideTabBar && cl("container-autohide"),
+                autoHideTabBar && revealOnMention && hasMention && cl("container-revealed"),
                 !compactAutoExpandSelected && cl("no-compact-auto-expand"),
                 !compactAutoExpandOnHover && cl("no-compact-hover-expand")
             )}
@@ -343,14 +449,18 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
                     customRef={node => { scrollerRef.current = node; }}
                     className={cl("tab-scroller", shouldFollowNewTabButton && "tab-scroller-following")}
                 >
-                    {openedTabs.filter(tab => tab != null).map((tab, i) =>
-                        <ChannelTab {...tab} index={i} key={tab.id} />
-                    )}
+                    {openedTabs
+                        .map((tab, i) => ({ tab, i }))
+                        .filter(({ tab }) => tab != null && (!searchActive || tabText(tab).includes(query)))
+                        .map(({ tab, i }) =>
+                            <ChannelTab {...tab} index={i} key={tab.id} searchActive={searchActive} />
+                        )}
                     {GhostTabs}
                     {shouldFollowNewTabButton && newTabButton}
                 </HorizontalScroller>
 
                 {!shouldFollowNewTabButton && newTabButton}
+                {searchBox}
             </div >
 
         </div>
