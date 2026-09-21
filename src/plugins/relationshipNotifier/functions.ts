@@ -48,7 +48,8 @@ export async function onRelationshipRemove({ relationship: { type, id } }: Relat
                 notify(
                     `${getUniqueUsername(user)} removed you as a friend.`,
                     user.getAvatarURL(undefined, undefined, false),
-                    () => openUserProfile(user.id)
+                    () => openUserProfile(user.id),
+                    user.id
                 );
             break;
         case RelationshipType.INCOMING_REQUEST:
@@ -56,7 +57,8 @@ export async function onRelationshipRemove({ relationship: { type, id } }: Relat
                 notify(
                     `A friend request from ${getUniqueUsername(user)} has been removed.`,
                     user.getAvatarURL(undefined, undefined, false),
-                    () => openUserProfile(user.id)
+                    () => openUserProfile(user.id),
+                    user.id
                 );
             break;
     }

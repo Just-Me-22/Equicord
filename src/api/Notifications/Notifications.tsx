@@ -68,6 +68,7 @@ export interface NotificationData {
     image?: string;
     onClick?(): void;
     onClose?(): void;
+    userId?: string;
     color?: string;
     /** Whether this notification should not have a timeout */
     permanent?: boolean;

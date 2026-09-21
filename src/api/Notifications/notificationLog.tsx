@@ -21,6 +21,7 @@ import { Settings } from "@api/Settings";
 import { Paragraph } from "@components/Paragraph";
 import { openNotificationSettingsModal } from "@components/settings/tabs/vencord/NotificationSettings";
 import { classNameFactory } from "@utils/css";
+import { openUserProfile } from "@utils/discord";
 import { useAwaiter } from "@utils/react";
 import { RenderModalProps } from "@vencord/discord-types";
 import { ConfirmModal, ListScrollerThin, Modal, openModal, React, Timestamp, useEffect, useReducer, useState } from "@webpack/common";
@@ -30,7 +31,7 @@ import type { DispatchWithoutAction } from "react";
 import NotificationComponent from "./NotificationComponent";
 import type { NotificationData } from "./Notifications";
 
-interface PersistentNotificationData extends Pick<NotificationData, "title" | "body" | "image" | "icon" | "color"> {
+interface PersistentNotificationData extends Pick<NotificationData, "title" | "body" | "image" | "icon" | "color" | "userId"> {
     timestamp: number;
     id: string;
 }
@@ -110,6 +111,7 @@ export function useLogs() {
 
 function NotificationEntry({ data }: { data: PersistentNotificationData; }) {
     const [removing, setRemoving] = useState(false);
+    const { userId } = data;
 
     return (
         <div className={cl("wrapper", { removing })}>
@@ -117,6 +119,7 @@ function NotificationEntry({ data }: { data: PersistentNotificationData; }) {
                 {...data}
                 permanent={true}
                 dismissOnClick={false}
+                onClick={userId ? () => openUserProfile(userId) : undefined}
                 onClose={() => {
                     if (removing) return;
                     setRemoving(true);

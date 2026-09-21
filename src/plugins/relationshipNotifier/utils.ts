@@ -77,7 +77,8 @@ export async function syncAndRunChecks() {
                     notify(
                         `You are no longer friends with ${getUniqueUsername(user)}.`,
                         user.getAvatarURL(undefined, undefined, false),
-                        () => openUserProfile(user.id)
+                        () => openUserProfile(user.id),
+                        user.id
                     );
             }
         }
@@ -94,14 +95,15 @@ export async function syncAndRunChecks() {
                     notify(
                         `Friend request from ${getUniqueUsername(user)} has been revoked.`,
                         user.getAvatarURL(undefined, undefined, false),
-                        () => openUserProfile(user.id)
+                        () => openUserProfile(user.id),
+                        user.id
                     );
             }
         }
     }
 }
 
-export function notify(text: string, icon?: string, onClick?: () => void) {
+export function notify(text: string, icon?: string, onClick?: () => void, userId?: string) {
     if (settings.store.notices)
         showNotice(text, "OK", () => popNotice());
 
@@ -109,7 +111,8 @@ export function notify(text: string, icon?: string, onClick?: () => void) {
         title: "Relationship Notifier",
         body: text,
         icon,
-        onClick
+        onClick,
+        userId
     });
 }
 
