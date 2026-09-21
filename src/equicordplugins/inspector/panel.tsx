@@ -190,8 +190,11 @@ const typing = (el: EventTarget | null) => {
 function Nearby({ el, at, close }: { el: Element; at?: Point; close: () => void; }) {
     const here = useMemo(() => at ? atPoint(el, at.x, at.y).filter(one => one !== el) : [], [el, at]);
     const up = el.parentElement;
+    // a click lands on whatever is on top, which is often a wrapper. without a way down
+    // the only element you can reach reliably is the one you already have.
+    const down = Array.from(el.children).slice(0, 4);
 
-    if (!here.length && !up) return null;
+    if (!here.length && !up && !down.length) return null;
 
     const jump = (node: Element) => () => { close(); show(node, undefined, at); };
 
@@ -203,6 +206,17 @@ function Nearby({ el, at, close }: { el: Element; at?: Point; close: () => void;
                     ↑ {label(up)}
                 </Button>
             )}
+            {down.map((node, i) => (
+                <Button
+                    key={`down-${i}`}
+                    size={Button.Sizes.MIN}
+                    look={Button.Looks.LINK}
+                    color={Button.Colors.PRIMARY}
+                    onClick={jump(node)}
+                >
+                    ↓ {label(node)}
+                </Button>
+            ))}
             {here.map((node, i) => (
                 <Button
                     key={i}

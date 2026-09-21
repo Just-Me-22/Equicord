@@ -25,7 +25,7 @@ const TRACKED = [
     "font-size", "font-family", "font-weight", "letter-spacing", "line-height",
     "border-top", "border-bottom", "border-left", "border-right",
     "border-radius", "clip-path",
-    "box-shadow", "mask-image", "opacity", "filter",
+    "box-shadow", "mask-image", "opacity", "filter", "backdrop-filter", "mix-blend-mode", "isolation",
     "gap", "inset", "transform", "transition",
     // svg carries colour here rather than in background and color
     "fill", "stroke", "stroke-width",
