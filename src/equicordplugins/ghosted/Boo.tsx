@@ -88,7 +88,6 @@ export function Boo({ channel }: { channel: Channel; }) {
 
     const currentUserId = useStateFromStores([UserStore], () => UserStore.getCurrentUser()?.id);
     const lastMessage = useStateFromStores([MessageStore], () => MessageStore.getMessages(id)?.last());
-    if (!lastMessage || !currentUserId) return null;
 
     const [state, setState] = useState({
         isCurrentUser: null as boolean | null,
@@ -169,7 +168,7 @@ export function Boo({ channel }: { channel: Channel; }) {
         }
 
         // if exempted or bot (if setting enabled), remove from ghost tracking
-        if (isExempted || (settings.store.ignoreBots && lastMessage.author.bot) || isInactive) {
+        if (isExempted || (settings.store.ignoreBots && lastMessage?.author.bot) || isInactive) {
             if (countedChannels.has(id)) {
                 countedChannels.delete(id);
                 setBooCount(getBooCount() - 1);
