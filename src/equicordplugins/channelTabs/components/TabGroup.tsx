@@ -7,9 +7,9 @@
 import { BaseText } from "@components/BaseText";
 import { ChannelTabsProps, getGroupActiveTab, groupLabel, groupTabs, isTabSelected, moveToTab, removeFromGroup, settings, TabGroup as TabGroupType, toggleGroupCollapsed } from "@equicordplugins/channelTabs/util";
 import { classNameFactory } from "@utils/css";
-import { ChannelStore, ContextMenuApi, GuildStore, ReadStateStore, useDrag, useDrop, useEffect, useRef, useState, useStateFromStores } from "@webpack/common";
+import { ChannelStore, ContextMenuApi, GuildStore, ReadStateStore, useDrag, useDrop, useEffect, useRef, UserStore, useState, useStateFromStores } from "@webpack/common";
 
-import ChannelTab, { GuildIcon, NotificationDot } from "./ChannelTab";
+import ChannelTab, { ChannelIcon, GuildIcon, NotificationDot } from "./ChannelTab";
 import { GroupContextMenu } from "./ContextMenus";
 
 const cl = classNameFactory("vc-channeltabs-");
@@ -21,7 +21,26 @@ function ChevronIcon() {
 }
 
 function tabLabel(tab: ChannelTabsProps, group: TabGroupType) {
-    return ChannelStore.getChannel(tab.channelId)?.name || groupLabel(group);
+    const channel = ChannelStore.getChannel(tab.channelId);
+    if (channel?.name) return channel.name;
+
+    const people = (channel?.recipients ?? []).map(id => {
+        const user = UserStore.getUser(id);
+        return user?.globalName || user?.username;
+    }).filter(Boolean);
+    return people.join(", ") || groupLabel(group);
+}
+
+function TabIcon({ tab }: { tab: ChannelTabsProps; }) {
+    const guild = GuildStore.getGuild(tab.guildId);
+    if (guild) return <GuildIcon guild={guild} />;
+
+    const channel = ChannelStore.getChannel(tab.channelId);
+    if (!channel?.recipients?.length) return null;
+    if (channel.recipients.length > 1) return <ChannelIcon channel={channel} />;
+
+    const user = UserStore.getUser(channel.recipients[0]);
+    return user ? <img className={cl("icon")} src={user.getAvatarURL(undefined, 48)} alt="" /> : null;
 }
 
 export default function TabGroup({ group, tabs, index }: { group: TabGroupType; tabs: ChannelTabsProps[]; index: number; }) {
@@ -55,7 +74,6 @@ export default function TabGroup({ group, tabs, index }: { group: TabGroupType; 
         clearTimeout(hoverTimer.current);
         setFlyoutAt(null);
     };
-    const guild = GuildStore.getGuild(activeTab.guildId);
     const label = tabLabel(activeTab, group);
     const showFlyout = groupHoverMenu && group.collapsed && flyoutAt;
 
@@ -96,7 +114,7 @@ export default function TabGroup({ group, tabs, index }: { group: TabGroupType; 
                 className={cl("button", "group-label")}
                 onClick={() => moveToTab(getGroupActiveTab(group.id).id)}
             >
-                {guild && <GuildIcon guild={guild} />}
+                <TabIcon tab={activeTab} />
                 <BaseText className={cl("name-text")}>{label}</BaseText>
                 <span className={cl("group-count")}>{tabs.length}</span>
                 <NotificationDot channelIds={tabs.map(tab => tab.channelId)} />

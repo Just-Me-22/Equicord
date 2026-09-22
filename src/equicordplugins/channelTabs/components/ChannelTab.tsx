@@ -60,7 +60,7 @@ export const GuildIcon = ({ guild }: { guild: Guild; }) => {
         </div>;
 };
 
-const ChannelIcon = ({ channel }: { channel: Channel; }) =>
+export const ChannelIcon = ({ channel }: { channel: Channel; }) =>
     <img
         src={channel?.icon
             ? `https://${window.GLOBAL_ENV.CDN_HOST}/channel-icons/${channel?.id}/${channel?.icon}.png`
