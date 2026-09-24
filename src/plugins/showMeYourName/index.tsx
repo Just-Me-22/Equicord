@@ -151,6 +151,20 @@ function validColor(color: string) {
     return !!toCSS(color);
 }
 
+let themeColorCache: { strong: string | null; muted: string; } | null = null;
+
+function themeColors() {
+    if (!themeColorCache) {
+        const styles = getComputedStyle(document.documentElement);
+        themeColorCache = {
+            strong: styles.getPropertyValue("--text-strong").trim() || null,
+            muted: styles.getPropertyValue("--text-muted").trim() || "#72767d"
+        };
+        requestAnimationFrame(() => themeColorCache = null);
+    }
+    return themeColorCache;
+}
+
 function resolveColor(
     colorStrings: colorStringsType,
     displayNameStyles: DisplayNameStyles | null | undefined,
@@ -160,7 +174,7 @@ function resolveColor(
     ircColorsEnabled: boolean,
     shouldShowEffects: boolean,
 ): Record<string, any> | null {
-    const defaultColor = getComputedStyle(document.documentElement).getPropertyValue("--text-strong").trim() || null;
+    const defaultColor = themeColors().strong;
 
     if (!defaultColor) { return null; }
 
@@ -735,7 +749,7 @@ function renderUsername(
     const topRoleStyle = author ? resolveColor(authorColorStrings, authorDisplayNameStyles, "Role", canUseGradient, inGuild, ircColorsEnabled, shouldShowHoverEffects) : null;
     const hasGradient = !!topRoleStyle?.gradient && Object.keys(topRoleStyle.gradient).length > 0;
 
-    const textMutedValue = getComputedStyle(document.documentElement)?.getPropertyValue("--text-muted")?.trim() || "#72767d";
+    const textMutedValue = themeColors().muted;
     const options = splitTemplate(includedNames);
     const resolvedUsernameColor = author ? resolveColor(authorColorStrings, authorDisplayNameStyles, usernameColor.trim(), canUseGradient, inGuild, ircColorsEnabled, shouldShowHoverEffects) : null;
     const resolvedDisplayNameColor = author ? resolveColor(authorColorStrings, authorDisplayNameStyles, displayNameColor.trim(), canUseGradient, inGuild, ircColorsEnabled, shouldShowHoverEffects) : null;
