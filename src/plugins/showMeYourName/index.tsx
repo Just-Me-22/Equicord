@@ -1544,7 +1544,7 @@ export default definePlugin({
             // Replace names in profile popouts.
             find: "shouldWrap:!0,loop:!0,inProfile:!0",
             replacement: {
-                match: /displayName:(\i),(?=trailing:\i,|size:\i=|displayNameSize:\i)/g,
+                match: /displayName:(\i),(?=trailing:\i,|displayNameSize:\i)/g,
                 replace: "showMeYourNameNickname:$1=$self.getTypingMemberListProfilesReactionsVoiceNameText({...arguments[0],type:\"profilesPopout\"})??(arguments[0].nickname),"
             },
         },
