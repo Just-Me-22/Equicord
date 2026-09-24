@@ -603,13 +603,13 @@
 
 /* Red glow effect for tabs with mentions */
 /* stylelint-disable-next-line no-descending-specificity */
-.vc-channeltabs-tab:has([data-has-mention="true"]) {
+.vc-channeltabs-tab.vc-channeltabs-tab-mention {
     box-shadow: 0 0 8px color-mix(in srgb, var(--danger-color, rgb(242 63 66)) 60%, transparent), 0 0 16px color-mix(in srgb, var(--danger-color, rgb(242 63 66)) 30%, transparent);
 }
 
 /* the glow marks the tab on its own; it only pulses while you are on it, so an
    unread mention does not repaint the tab bar for as long as it sits there */
-.vc-channeltabs-tab:has([data-has-mention="true"]):hover {
+.vc-channeltabs-tab.vc-channeltabs-tab-mention:hover {
     animation: vc-channeltabs-mention-pulse 2s ease-in-out infinite;
 }
 
@@ -627,7 +627,7 @@
 }
 
 /* Enhance glow for selected tabs with mentions */
-.vc-channeltabs-tab-selected:has([data-has-mention="true"]) {
+.vc-channeltabs-tab-selected.vc-channeltabs-tab-mention {
     box-shadow:
         0 1px 3px rgb(0 0 0 / 20%),
         0 0 12px color-mix(in srgb, var(--danger-color, rgb(242 63 66)) 80%, transparent),
@@ -887,7 +887,7 @@
 }
 
 /* Disable tab transitions when any tab is being dragged for smoother reordering */
-.vc-channeltabs-tab-container:has(.vc-channeltabs-tab-dragging) .vc-channeltabs-tab:not(.vc-channeltabs-tab-dragging) {
+.vc-channeltabs-tab-container.vc-channeltabs-tab-container-dragging .vc-channeltabs-tab:not(.vc-channeltabs-tab-dragging) {
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -1025,12 +1025,12 @@
 }
 
 /* Mention glow - disable if setting is off */
-.vc-channeltabs-container.vc-channeltabs-no-mention-glow .vc-channeltabs-tab:has([data-has-mention="true"]) {
+.vc-channeltabs-container.vc-channeltabs-no-mention-glow .vc-channeltabs-tab.vc-channeltabs-tab-mention {
     animation: none !important;
     box-shadow: 0 1px 3px rgb(0 0 0 / 20%) !important;
 }
 
-.vc-channeltabs-container.vc-channeltabs-no-mention-glow .vc-channeltabs-tab-selected:has([data-has-mention="true"]) {
+.vc-channeltabs-container.vc-channeltabs-no-mention-glow .vc-channeltabs-tab-selected.vc-channeltabs-tab-mention {
     box-shadow: 0 1px 3px rgb(0 0 0 / 20%) !important;
 }
 
@@ -1068,7 +1068,7 @@
     transition: none !important;
 }
 
-.vc-channeltabs-container.vc-channeltabs-no-tab-positioning .vc-channeltabs-tab-container:has(.vc-channeltabs-tab-dragging) .vc-channeltabs-tab:not(.vc-channeltabs-tab-dragging) {
+.vc-channeltabs-container.vc-channeltabs-no-tab-positioning .vc-channeltabs-tab-container.vc-channeltabs-tab-container-dragging .vc-channeltabs-tab:not(.vc-channeltabs-tab-dragging) {
     transition: none !important;
 }
 
@@ -1436,30 +1436,44 @@
     border-top: 1px solid var(--background-mod-muted) !important;
 }
 
-/* collapsed until you hover the bar, or until a tab wants your attention */
-.vc-channeltabs-container-autohide .vc-channeltabs-tab-container,
+/* hidden until you hover the bar, or until a tab wants your attention, then it floats over the chat */
+.vc-channeltabs-container-autohide {
+    position: relative;
+}
+
 .vc-channeltabs-container-autohide .vc-channeltabs-separator {
-    height: 0;
-    margin: 0;
+    display: none;
+}
+
+.vc-channeltabs-container-autohide .vc-channeltabs-tab-container {
+    position: absolute;
+    z-index: 102;
+    right: 0;
+    bottom: 100%;
+    left: 0;
+    height: calc(44px * var(--tab-height-scale, 1));
+    padding: 4px;
+    border-radius: inherit;
+    background-color: inherit;
     opacity: 0;
-    overflow: hidden;
+    transform: translateY(8px);
+    pointer-events: none;
     transition:
-        height 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-        margin 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-        opacity 0.2s ease;
+        transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+        opacity 0.15s ease;
+}
+
+.vc-channeltabs-container-top.vc-channeltabs-container-autohide .vc-channeltabs-tab-container {
+    top: 100%;
+    bottom: auto;
+    transform: translateY(-8px);
 }
 
 .vc-channeltabs-container-autohide:hover .vc-channeltabs-tab-container,
 .vc-channeltabs-container-revealed .vc-channeltabs-tab-container {
-    height: calc(44px * var(--tab-height-scale, 1));
     opacity: 1;
-}
-
-.vc-channeltabs-container-autohide:hover .vc-channeltabs-separator,
-.vc-channeltabs-container-revealed .vc-channeltabs-separator {
-    height: 1px;
-    margin: 4px auto;
-    opacity: 1;
+    transform: none;
+    pointer-events: auto;
 }
 
 .vc-channeltabs-group {

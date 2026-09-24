@@ -116,6 +116,15 @@ const unsetUpdate: UpdateFunction = () => {
 };
 let update = unsetUpdate;
 export const triggerTabsUpdate = (save?: boolean) => update(save);
+
+let tabDragging = false;
+export const isTabDragging = () => tabDragging;
+export function setTabDragging(value: boolean) {
+    if (tabDragging === value) return;
+    tabDragging = value;
+    update(false);
+}
+
 let bumpGhostTabCount = () => {
     logger.warn("Set ghost tab function not set");
 };
@@ -586,7 +595,8 @@ export function moveCurrentTab(by: number) {
 }
 
 export function anyTabHasMention() {
-    return openTabs.some(tab => ReadStateStore.getMentionCount(tab.channelId) > 0);
+    const current = SelectedChannelStore.getChannelId();
+    return openTabs.some(tab => tab.channelId !== current && ReadStateStore.getMentionCount(tab.channelId) > 0);
 }
 
 export function reopenClosedTab() {

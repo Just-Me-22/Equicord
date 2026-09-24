@@ -5,7 +5,7 @@
  */
 
 import { BaseText } from "@components/BaseText";
-import { ChannelTabsProps, closeTab, ensureUnreadFallbackCountsLoaded, getNotificationDotState, getUnreadFallbackCounts, groupTabs, guildColor, isTabSelected, moveDraggedGroup, moveDraggedTabs, moveToTab, openedTabs, removeFromGroup, settings, updateUnreadFallbackCounts } from "@equicordplugins/channelTabs/util";
+import { ChannelTabsProps, closeTab, ensureUnreadFallbackCountsLoaded, getNotificationDotState, getUnreadFallbackCounts, groupTabs, guildColor, isTabSelected, moveDraggedGroup, moveDraggedTabs, moveToTab, openedTabs, removeFromGroup, setTabDragging, settings, updateUnreadFallbackCounts } from "@equicordplugins/channelTabs/util";
 import { ActivityIcon, CircleQuestionIcon, DiscoveryIcon, EnvelopeIcon, FriendsIcon, ICYMIIcon, NitroIcon, QuestIcon, ShopIcon } from "@equicordplugins/channelTabs/util/icons";
 import { getActiveAutoCompletes } from "@equicordplugins/questify/utils/completion";
 import { classNameFactory } from "@utils/css";
@@ -90,7 +90,7 @@ function getChannelUnreadState(channelId: string) {
     };
 }
 
-export const NotificationDot = ({ channelIds }: { channelIds: string[]; }) => {
+export const NotificationDot = ({ channelIds, onMention }: { channelIds: string[]; onMention?: (hasMention: boolean) => void; }) => {
     const userId = UserStore.getCurrentUser()?.id;
     const { persistUnreadCountFallback } = settings.use(["persistUnreadCountFallback"]);
     const [, forceUpdate] = useState(0);
@@ -105,6 +105,11 @@ export const NotificationDot = ({ channelIds }: { channelIds: string[]; }) => {
         userId ? getUnreadFallbackCounts(userId) : {},
         persistUnreadCountFallback
     );
+
+    const showsMention = shouldShow && hasMention;
+    useEffect(() => {
+        onMention?.(showsMention);
+    }, [showsMention, onMention]);
 
     useEffect(() => {
         if (!userId || !persistUnreadCountFallback) return;
@@ -169,8 +174,9 @@ export const TabNumberBadge = ({ number, position, isSelected, isCompact, isHove
 function ChannelTabContent(props: ChannelTabsProps & {
     guild?: Guild,
     channel?: Channel;
+    onMention?: (hasMention: boolean) => void;
 }) {
-    const { guild, guildId, channel, channelId, compact } = props;
+    const { guild, guildId, channel, channelId, compact, onMention } = props;
     const userId = UserStore.getCurrentUser()?.id;
     const recipients = channel?.recipients;
     const {
@@ -197,7 +203,7 @@ function ChannelTabContent(props: ChannelTabsProps & {
                     <GuildIcon guild={guild} />
                     <ChannelTypeIcon channel={channel} guild={guild} />
                     <BaseText className={cl("name-text")}>{channel.name}</BaseText>
-                    <NotificationDot channelIds={[channel.id]} />
+                    <NotificationDot channelIds={[channel.id]} onMention={onMention} />
                     <TypingIndicator isTyping={isTyping} />
                 </>
             );
@@ -246,7 +252,7 @@ function ChannelTabContent(props: ChannelTabsProps & {
                     <BaseText className={cl("name-text")}>
                         {username}
                     </BaseText>
-                    <NotificationDot channelIds={[channel.id]} />
+                    <NotificationDot channelIds={[channel.id]} onMention={onMention} />
                     {!showStatusIndicators && <TypingIndicator isTyping={isTyping} />}
                 </>
             );
@@ -256,7 +262,7 @@ function ChannelTabContent(props: ChannelTabsProps & {
                 <>
                     <ChannelIcon channel={channel} />
                     <BaseText className={cl("name-text")}>{channel?.name || getIntlMessage("GROUP_DM")}</BaseText>
-                    <NotificationDot channelIds={[channel.id]} />
+                    <NotificationDot channelIds={[channel.id]} onMention={onMention} />
                     <TypingIndicator isTyping={isTyping} />
                 </>
             );
@@ -317,6 +323,7 @@ export default function ChannelTab(props: ChannelTabsProps & { index: number; se
     const [isDropTarget, setIsDropTarget] = useState(false);
     const [isGroupTarget, setIsGroupTarget] = useState(false);
     const [isHovered, setIsHovered] = useState(false);
+    const [hasMention, setHasMention] = useState(false);
 
     const { showTabNumbers, tabNumberPosition } = settings.use(["showTabNumbers", "tabNumberPosition"]);
 
@@ -391,6 +398,7 @@ export default function ChannelTab(props: ChannelTabsProps & { index: number; se
         canDrag: () => !searchActive,
         item: () => {
             setIsDragging(true);
+            setTabDragging(true);
             lastSwapTimeRef.current = Date.now() - SWAP_THROTTLE_MS;
 
             // get fresh tab data dynamically to avoid stale closures
@@ -407,6 +415,7 @@ export default function ChannelTab(props: ChannelTabsProps & { index: number; se
         }),
         end: (item, monitor) => {
             setIsDragging(false);
+            setTabDragging(false);
             setIsDropTarget(false);
             lastSwapTimeRef.current = 0;
 
@@ -494,6 +503,7 @@ export default function ChannelTab(props: ChannelTabsProps & { index: number; se
             "tab-entering": isEntering,
             "tab-closing": isClosing,
             "tab-dragging": isDragging,
+            "tab-mention": hasMention,
             "tab-drop-target": isDropTarget && !isGroupTarget,
             "tab-group-target": isGroupTarget,
             "tab-pinned": !!props.pinned,
@@ -534,7 +544,7 @@ export default function ChannelTab(props: ChannelTabsProps & { index: number; se
                     />
                 )}
 
-                <ChannelTabContent {...props} guild={guild} channel={channel} />
+                <ChannelTabContent {...props} guild={guild} channel={channel} onMention={setHasMention} />
 
                 {/* right position badge */}
                 {showTabNumbers && tabNumberPosition === "right" && (

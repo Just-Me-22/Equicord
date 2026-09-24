@@ -7,13 +7,13 @@
 import { Flex } from "@components/Flex";
 import { Heading } from "@components/Heading";
 import { Paragraph } from "@components/Paragraph";
-import { autoGroupAll, BasicChannelTabsProps, ChannelTabsProps, clearStaleNavigationContext, closeTab, createTab, getGroupSegments, handleChannelSwitch, isNavigationFromSource, isTabSelected, jumpToUnreadTab, moveCurrentTab, moveToTab, openedTabs, openStartupTabs, saveTabs, settings, setUpdaterFunction, ungroupAutoGroups, useGhostTabs } from "@equicordplugins/channelTabs/util";
+import { autoGroupAll, BasicChannelTabsProps, ChannelTabsProps, clearStaleNavigationContext, closeTab, createTab, getGroupSegments, handleChannelSwitch, isNavigationFromSource, isTabDragging, isTabSelected, jumpToUnreadTab, moveCurrentTab, moveToTab, openedTabs, openStartupTabs, saveTabs, settings, setUpdaterFunction, ungroupAutoGroups, useGhostTabs } from "@equicordplugins/channelTabs/util";
 import { IS_MAC } from "@utils/constants";
 import { classNameFactory } from "@utils/css";
 import { classes } from "@utils/misc";
 import { useForceUpdater } from "@utils/react";
 import { findComponentByCodeLazy } from "@webpack";
-import { Button, ChannelRTCStore, ChannelStore, ContextMenuApi, FluxDispatcher, GuildStore, ReadStateStore, TextInput, Tooltip, useCallback, useEffect, useRef, UserStore, useState, useStateFromStores } from "@webpack/common";
+import { Button, ChannelRTCStore, ChannelStore, ContextMenuApi, FluxDispatcher, GuildStore, ReadStateStore, SelectedChannelStore, TextInput, Tooltip, useCallback, useEffect, useRef, UserStore, useState, useStateFromStores } from "@webpack/common";
 
 import channelTabs from "..";
 import { anyTabHasMention } from "../util/tabs";
@@ -131,7 +131,7 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
     ]);
     const GhostTabs = useGhostTabs();
     const isFullscreen = useStateFromStores([], () => ChannelRTCStore.isFullscreenInContext() ?? false);
-    const hasMention = useStateFromStores([ReadStateStore], () => anyTabHasMention());
+    const hasMention = useStateFromStores([ReadStateStore, SelectedChannelStore], () => anyTabHasMention());
 
     useEffect(() => {
         if (!isSearchOpen) return;
@@ -465,7 +465,7 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
                 <BookmarkContainer {...props} userId={userId} />
                 <div className={cl("separator")} />
             </>}
-            <div className={cl("tab-container")}>
+            <div className={cl("tab-container", { "tab-container-dragging": isTabDragging() })}>
                 <HorizontalScroller
                     customRef={node => { scrollerRef.current = node; }}
                     className={cl("tab-scroller", shouldFollowNewTabButton && "tab-scroller-following")}
