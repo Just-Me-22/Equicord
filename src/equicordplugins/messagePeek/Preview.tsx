@@ -9,13 +9,14 @@ import betterActivities from "@equicordplugins/betterActivities";
 import showMeYourName from "@plugins/showMeYourName";
 import { classNameFactory } from "@utils/css";
 import { classes } from "@utils/misc";
-import { Activity, ApplicationStream, Channel, Message, OnlineStatus, User } from "@vencord/discord-types";
+import { Activity, ApplicationStream, Channel, Message, OnlineStatus, ReactionEmoji, User } from "@vencord/discord-types";
+import { MessageType } from "@vencord/discord-types/enums";
 import { findByCodeLazy, findComponentByCodeLazy, findCssClassesLazy } from "@webpack";
-import { CallStore, DraftStore, DraftType, ExperimentStore, IconUtils, NavigationRouter, Parser, ReadStateStore, RelationshipStore, SelectedChannelStore, SnowflakeUtils, StreamerModeStore, TypingStore, UserGuildSettingsStore, UserStore, useStateFromStores } from "@webpack/common";
+import { CallStore, DraftStore, DraftType, ExperimentStore, IconUtils, NavigationRouter, Parser, ReadStateStore, ReferencedMessageStore, RelationshipStore, SelectedChannelStore, SnowflakeUtils, StreamerModeStore, Tooltip, TypingStore, UserGuildSettingsStore, UserStore, useStateFromStores } from "@webpack/common";
 
 import { Actions } from "./Actions";
-import { formatRelativeTime, formatTimestamp, getMessageContent, Icons, isStale, matchesKeyword, plainText } from "./content";
-import { useLastMessage, useMinute } from "./hooks";
+import { displayName, formatRelativeTime, formatTimestamp, getMessageContent, Icons, isStale, matchesKeyword, plainText } from "./content";
+import { reactionOn, useLastMessage, useMinute } from "./hooks";
 import { settings } from "./settings";
 
 const cl = classNameFactory("vc-message-peek-");
@@ -57,9 +58,12 @@ function getActivityIcons(activities: Activity[] | null, user: User): React.Reac
     });
 }
 
-function displayName(userId: string) {
+function typingName(userId: string) {
     const user = UserStore.getUser(userId);
-    return RelationshipStore.getNickname(userId) || user?.globalName || user?.username || "Someone";
+    const smynName = user && isPluginEnabled(showMeYourName.name)
+        ? showMeYourName.getTypingMemberListProfilesReactionsVoiceNameText({ user, type: "typingIndicator" })
+        : null;
+    return smynName || displayName(userId);
 }
 
 function authorNameOf(message: Message, smynName: string | null) {
@@ -97,6 +101,15 @@ function useUnread(channelId: string) {
     }), [channelId], (a, b) => a.unread === b.unread && a.count === b.count);
 }
 
+const EmojiImage = ({ emoji }: { emoji: ReactionEmoji; }) => emoji.id
+    ? <img className={cl("emoji")} src={IconUtils.getEmojiURL({ id: emoji.id, animated: emoji.animated, size: 32 })} alt={`:${emoji.name}:`} />
+    : <>{emoji.name}</>;
+
+function repliesTo(message: Message, userId: string | undefined) {
+    return message.type === MessageType.REPLY
+        && ReferencedMessageStore.getMessageByReference(message.messageReference)?.message?.author.id === userId;
+}
+
 function MessageLine({ channel, user, message }: { channel: Channel; user: User | null | undefined; message: Message; }) {
     const { unread, count } = useUnread(channel.id);
     const smynName = isPluginEnabled(showMeYourName.name)
@@ -107,38 +120,66 @@ function MessageLine({ channel, user, message }: { channel: Channel; user: User 
     if (!content) return null;
 
     const { senderAvatars, boldUnread, unreadCount, fullTextTooltip, jumpToMessage, blurPreviews } = settings.store;
+    const me = UserStore.getCurrentUser()?.id;
+    const mine = message.author.id === me;
+    const blocked = !mine && RelationshipStore.isBlockedOrIgnored(message.author.id);
+    const reaction = mine ? reactionOn(message) : null;
     const authorName = authorNameOf(message, smynName);
-    const raw = plainText(message);
-    const Icon = content.icon ? Icons[content.icon] : null;
+    const raw = blocked ? "" : plainText(message);
+    const Icon = content.icon && !blocked && !reaction ? Icons[content.icon] : null;
+
+    const jump = (e: React.SyntheticEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        NavigationRouter.transitionTo(`/channels/@me/${channel.id}/${message.id}`);
+    };
+
+    const named = mine || channel.isMultiUserDM();
+    const prefix = content.missed ? ""
+        : content.action ? `${authorName} `
+            : repliesTo(message, me) ? named ? `${authorName} replied to you: ` : "Replied to you: "
+                : named ? `${authorName}: ` : "";
+
+    const body = blocked ? "Blocked message"
+        : reaction ? <>{reaction.userId ? `${displayName(reaction.userId)} reacted ` : "Reacted "}<EmojiImage emoji={reaction.emoji} /></>
+            : <>
+                {prefix}{content.text}
+                {message.editedTimestamp && !content.action && <span className={cl("edited")}> (edited)</span>}
+            </>;
 
     return (
-        <div
-            className={classes(
-                ActivityClasses.container,
-                ActivityClasses.textXs,
-                cl("preview", {
-                    unread: boldUnread && unread,
-                    keyword: matchesKeyword(raw),
-                    stale: isStale(SnowflakeUtils.extractTimestamp(message.id)),
-                    blurred: blurPreviews
-                })
+        <Tooltip text={`${authorName}: ${raw}`} shouldShow={fullTextTooltip && Boolean(raw)}>
+            {tooltipProps => (
+                <div
+                    {...tooltipProps}
+                    className={classes(
+                        ActivityClasses.container,
+                        ActivityClasses.textXs,
+                        cl("preview", {
+                            unread: boldUnread && unread,
+                            keyword: matchesKeyword(raw),
+                            mentioned: message.mentioned && !mine && !blocked,
+                            missed: content.missed,
+                            stale: isStale(SnowflakeUtils.extractTimestamp(message.id)),
+                            blurred: blurPreviews
+                        })
+                    )}
+                    role={jumpToMessage ? "link" : undefined}
+                    tabIndex={jumpToMessage ? 0 : undefined}
+                    onClick={jumpToMessage ? e => jump(e) : tooltipProps.onClick}
+                    onKeyDown={jumpToMessage ? e => e.key === "Enter" && jump(e) : undefined}
+                >
+                    {senderAvatars && <img className={cl("avatar")} src={IconUtils.getUserAvatarURL(message.author, false, 16)} alt="" />}
+                    <span className={ActivityClasses.truncated}>{body}</span>
+                    {Icon && (
+                        <span className={cl("icon")}>
+                            <Icon size="xxs" className={ActivityClasses.icon} />
+                        </span>
+                    )}
+                    {unreadCount && count > 0 && <span className={cl("count")}>{count > 99 ? "99+" : count}</span>}
+                </div>
             )}
-            title={fullTextTooltip ? `${authorName}: ${raw}` : undefined}
-            onClick={jumpToMessage ? e => {
-                e.preventDefault();
-                e.stopPropagation();
-                NavigationRouter.transitionTo(`/channels/@me/${channel.id}/${message.id}`);
-            } : undefined}
-        >
-            {senderAvatars && <img className={cl("avatar")} src={IconUtils.getUserAvatarURL(message.author, false, 16)} alt="" />}
-            <span className={ActivityClasses.truncated}>{authorName}: {content.text}</span>
-            {Icon && (
-                <span className={cl("icon")}>
-                    <Icon size="xxs" className={ActivityClasses.icon} />
-                </span>
-            )}
-            {unreadCount && count > 0 && <span className={cl("count")}>{count}</span>}
-        </div>
+        </Tooltip>
     );
 }
 
@@ -162,7 +203,9 @@ function previewOf({ channel, user }: PrivateChannelProps, message: Message | un
     if (typing) {
         const ids = typing.split(",");
         return <StatusLine className={cl("typing")}>
-            {ids.length === 1 ? `${displayName(ids[0])} is typing…` : `${ids.length} people are typing…`}
+            {ids.length === 1 ? `${typingName(ids[0])} is typing…`
+                : ids.length === 2 ? `${typingName(ids[0])} and ${typingName(ids[1])} are typing…`
+                    : `${ids.length} people are typing…`}
         </StatusLine>;
     }
 
@@ -216,7 +259,7 @@ export function SubText(props: PrivateChannelProps) {
 export function Decorator({ channel }: { channel: Channel; }) {
     const { hideMuted, timestampStyle } = settings.use(["hideMuted", "timestampStyle"]);
     const lastMessage = useLastMessage(channel.id);
-    useMinute(Boolean(lastMessage) && timestampStyle === "relative");
+    useMinute(Boolean(lastMessage) && timestampStyle !== "date");
 
     if (hideMuted && UserGuildSettingsStore.isChannelMuted(null!, channel.id)) return null;
 

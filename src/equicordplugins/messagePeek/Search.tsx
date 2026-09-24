@@ -5,8 +5,9 @@
  */
 
 import { classNameFactory } from "@utils/css";
-import { ChannelStore, MessageStore, RelationshipStore, useEffect, UserStore, useState } from "@webpack/common";
+import { ChannelStore, MessageStore, ReadStateStore, ReadStateUtils, RelationshipStore, useEffect, UserStore, useState, useStateFromStores } from "@webpack/common";
 
+import { READ_ICON } from "./Actions";
 import { plainText } from "./content";
 import { settings } from "./settings";
 
@@ -64,6 +65,12 @@ function SearchRow() {
         setQuery(next);
     };
 
+    const unread = useStateFromStores(
+        [ReadStateStore],
+        () => ChannelStore.getSortedPrivateChannels().filter(channel => ReadStateStore.hasUnread(channel.id)).map(channel => channel.id).join(),
+        []
+    );
+
     return <li className={cl("search")}>
         <input
             className={cl("search-input")}
@@ -74,6 +81,15 @@ function SearchRow() {
                 if (e.key === "Escape") update("");
             }}
         />
+        {unread && <button
+            className={cl("action")}
+            aria-label="Mark all DMs as read"
+            onClick={() => {
+                for (const id of unread.split(",")) ReadStateUtils.ackChannel(ChannelStore.getChannel(id));
+            }}
+        >
+            <svg width={14} height={14} viewBox="0 0 24 24"><path fill="currentColor" d={READ_ICON} /></svg>
+        </button>}
     </li>;
 }
 

@@ -9,15 +9,11 @@ import "./style.css";
 import { DecoratorProps } from "@api/MemberListDecorators";
 import { Devs, EquicordDevs } from "@utils/constants";
 import definePlugin from "@utils/types";
-import { findByPropsLazy } from "@webpack";
-import { ChannelStore, MessageStore } from "@webpack/common";
 
 import { startWatching, stopWatching } from "./hooks";
 import { Decorator, PrivateChannelProps, SubText } from "./Preview";
 import { clearSearch, useFilteredIds, withSearch } from "./Search";
 import { settings } from "./settings";
-
-const MessageActions = findByPropsLazy("fetchMessages", "sendMessage");
 
 export default definePlugin({
     name: "MessagePeek",
@@ -53,29 +49,8 @@ export default definePlugin({
         }
     ],
 
-    async start() {
+    start() {
         startWatching();
-
-        const channels = ChannelStore.getSortedPrivateChannels()
-            .slice(0, 25)
-            .filter(c => !MessageStore.getLastMessage(c.id));
-
-        for (let i = 0; i < channels.length; i += 5) {
-            const batch = channels.slice(i, i + 5);
-
-            await Promise.allSettled(
-                batch.map(channel =>
-                    MessageActions.fetchMessages({
-                        channelId: channel.id,
-                        limit: 1
-                    })
-                )
-            );
-
-            if (i + 5 < channels.length) {
-                await new Promise(r => setTimeout(r, 3000));
-            }
-        }
     },
 
     stop() {
