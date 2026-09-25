@@ -495,6 +495,88 @@ function runFactoryWithWrap(patchedFactory: PatchedModuleFactory, thisArg: unkno
     return factoryReturn;
 }
 
+interface FindMatcher {
+    finds: Set<string>;
+    delta: Int32Array;
+    outputs: string[][];
+    hasOutput: Uint8Array;
+}
+
+let findMatcher: FindMatcher | undefined;
+
+function buildFindMatcher(): FindMatcher {
+    const finds = new Set<string>();
+    for (const { find } of patches) {
+        if (typeof find === "string" && find.length > 0 && [...find].every(char => char.charCodeAt(0) < 128)) finds.add(find);
+    }
+
+    const edges: Map<number, number>[] = [new Map()];
+    const outputs: string[][] = [[]];
+    for (const find of finds) {
+        let state = 0;
+        for (let i = 0; i < find.length; i++) {
+            const char = find.charCodeAt(i);
+            let next = edges[state].get(char);
+            if (next === undefined) {
+                next = edges.length;
+                edges.push(new Map());
+                outputs.push([]);
+                edges[state].set(char, next);
+            }
+            state = next;
+        }
+        outputs[state].push(find);
+    }
+
+    const delta = new Int32Array(edges.length * 128);
+    const fail = new Int32Array(edges.length);
+    const queue: number[] = [];
+    for (const [char, next] of edges[0]) {
+        delta[char] = next;
+        queue.push(next);
+    }
+
+    for (let q = 0; q < queue.length; q++) {
+        const state = queue[q];
+        outputs[state].push(...outputs[fail[state]]);
+
+        for (let char = 0; char < 128; char++) {
+            const next = edges[state].get(char);
+            if (next === undefined) {
+                delta[state * 128 + char] = delta[fail[state] * 128 + char];
+            } else {
+                fail[next] = delta[fail[state] * 128 + char];
+                delta[state * 128 + char] = next;
+                queue.push(next);
+            }
+        }
+    }
+
+    const hasOutput = new Uint8Array(edges.length);
+    for (let state = 0; state < edges.length; state++) {
+        if (outputs[state].length) hasOutput[state] = 1;
+    }
+
+    return { finds, delta, outputs, hasOutput };
+}
+
+function stringFindsIn(code: string) {
+    findMatcher ??= buildFindMatcher();
+    const { delta, outputs, hasOutput } = findMatcher;
+
+    const found = new Set<string>();
+    let state = 0;
+    for (let i = 0; i < code.length; i++) {
+        const char = code.charCodeAt(i);
+        state = char < 128 ? delta[state * 128 + char] : 0;
+        if (hasOutput[state]) {
+            for (const find of outputs[state]) found.add(find);
+        }
+    }
+
+    return found;
+}
+
 /**
  * Patches a module factory.
  *
@@ -504,6 +586,7 @@ function runFactoryWithWrap(patchedFactory: PatchedModuleFactory, thisArg: unkno
  */
 function patchFactory(moduleId: PropertyKey, originalFactory: AnyModuleFactory): PatchedModuleFactory {
     const originalFactoryCode = String(originalFactory);
+    const foundStrings = stringFindsIn(originalFactoryCode);
     const isArrowFunction = originalFactoryCode.startsWith("(");
 
     // 0, prefix to turn it into an expression: 0,function(){} would be invalid syntax without the 0,
@@ -528,7 +611,7 @@ function patchFactory(moduleId: PropertyKey, originalFactory: AnyModuleFactory):
         }
 
         const moduleMatches = typeof patch.find === "string"
-            ? originalFactoryCode.includes(patch.find)
+            ? (findMatcher!.finds.has(patch.find) ? foundStrings.has(patch.find) : originalFactoryCode.includes(patch.find))
             : (patch.find.global && (patch.find.lastIndex = 0), patch.find.test(originalFactoryCode));
 
         if (!moduleMatches) {
