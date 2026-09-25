@@ -1545,6 +1545,10 @@
         visibility 0s linear 0.2s;
 }
 
+.vc-channeltabs-group:not(.vc-channeltabs-group-expanded) .vc-channeltabs-group-members {
+    height: 0;
+}
+
 .vc-channeltabs-group-expanded .vc-channeltabs-group-members {
     grid-template-columns: 1fr;
     visibility: visible;
