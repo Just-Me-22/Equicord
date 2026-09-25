@@ -50,26 +50,25 @@ export function reactionOn(message: Message): SeenReaction | null {
     return reactions.get(message.id) ?? { userId: null, emoji: others.emoji };
 }
 
-const FETCH_GAP = 300;
+const PARALLEL = 3;
 const asked = new Set<string>();
 const waiting: string[] = [];
-let pumping = false;
+let running = 0;
 
-async function pump() {
-    pumping = true;
-
-    while (waiting.length) {
+function pump() {
+    while (running < PARALLEL && waiting.length) {
         const channelId = waiting.shift()!;
         if (!watchers.has(channelId)) {
             asked.delete(channelId);
             continue;
         }
 
-        await loadRecent(channelId, 1);
-        await new Promise(r => setTimeout(r, FETCH_GAP));
+        running++;
+        void loadRecent(channelId, 1).then(() => {
+            running--;
+            pump();
+        });
     }
-
-    pumping = false;
 }
 
 export function loadRecent(channelId: string, limit: number) {
@@ -81,7 +80,7 @@ function fetchLast(channelId: string) {
 
     asked.add(channelId);
     waiting.push(channelId);
-    if (!pumping) void pump();
+    pump();
 }
 
 function onMessageEvent(event: any) {
