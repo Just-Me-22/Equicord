@@ -587,14 +587,7 @@ function stringFindsIn(code: string) {
 function patchFactory(moduleId: PropertyKey, originalFactory: AnyModuleFactory): PatchedModuleFactory {
     const originalFactoryCode = String(originalFactory);
     const foundStrings = stringFindsIn(originalFactoryCode);
-    const isArrowFunction = originalFactoryCode.startsWith("(");
-
-    // 0, prefix to turn it into an expression: 0,function(){} would be invalid syntax without the 0,
-    let patchedCode = "0," + (!isArrowFunction ? "function" : "") + originalFactoryCode.slice(originalFactoryCode.indexOf("("));
-    let patchedSource = patchedCode;
-    let patchedFactory = originalFactory;
-
-    const patchedBy = new Set<string>();
+    const matched: Patch[] = [];
 
     for (let i = 0; i < patches.length; i++) {
         const patch = patches[i];
@@ -618,6 +611,56 @@ function patchFactory(moduleId: PropertyKey, originalFactory: AnyModuleFactory):
             continue;
         }
 
+        matched.push(patch);
+
+        if (!patch.all) {
+            patches.splice(i--, 1);
+        }
+    }
+
+    let result: AppliedPatches;
+    try {
+        result = applyPatches(moduleId, originalFactory, originalFactoryCode, matched, false);
+    } catch {
+        result = applyPatches(moduleId, originalFactory, originalFactoryCode, matched, true);
+    }
+
+    const { patchedFactory, patchedSource, patchedBy } = result;
+    patchedFactory[SYM_ORIGINAL_FACTORY] = originalFactory;
+
+    if (IS_DEV && patchedFactory !== originalFactory) {
+        originalFactory[SYM_PATCHED_SOURCE] = patchedSource;
+        originalFactory[SYM_PATCHED_BY] = patchedBy;
+    }
+
+    return patchedFactory as PatchedModuleFactory;
+}
+
+interface AppliedPatches {
+    patchedFactory: AnyModuleFactory;
+    patchedSource: string;
+    patchedBy: Set<string>;
+}
+
+function sourceOf(moduleId: PropertyKey, patchedBy: Set<string>, code: string) {
+    return `// Webpack Module ${String(moduleId)} - Patched by ${[...patchedBy].join(", ")}\n${code}\n//# sourceURL=file:///WebpackModule${String(moduleId)}`;
+}
+
+function applyPatches(moduleId: PropertyKey, originalFactory: AnyModuleFactory, originalFactoryCode: string, matched: Patch[], evalEach: boolean): AppliedPatches {
+    const isArrowFunction = originalFactoryCode.startsWith("(");
+
+    // 0, prefix to turn it into an expression: 0,function(){} would be invalid syntax without the 0,
+    const unpatchedCode = "0," + (!isArrowFunction ? "function" : "") + originalFactoryCode.slice(originalFactoryCode.indexOf("("));
+    let patchedCode = unpatchedCode;
+    let patchedSource = patchedCode;
+    let patchedFactory = originalFactory;
+
+    const patchedBy = new Set<string>();
+
+    const buildNumber = getBuildNumber();
+    const shouldCheckBuildNumber = buildNumber !== -1;
+
+    for (const patch of matched) {
         // Save the result from the previous patch so we can restore it in case a patch group fails.
         const previousPatchedCode = patchedCode;
         const previousPatchedSource = patchedSource;
@@ -685,13 +728,9 @@ function patchFactory(moduleId: PropertyKey, originalFactory: AnyModuleFactory):
                     continue;
                 }
 
-                const pluginsList = [...patchedBy];
-                if (!patchedBy.has(patch.plugin)) {
-                    pluginsList.push(patch.plugin);
-                }
-
-                const newPatchedSource = `// Webpack Module ${String(moduleId)} - Patched by ${pluginsList.join(", ")}\n${newPatchedCode}\n//# sourceURL=file:///WebpackModule${String(moduleId)}`;
-                const newPatchedFactory = (0, eval)(newPatchedSource);
+                const pluginsList = new Set(patchedBy).add(patch.plugin);
+                const newPatchedSource = sourceOf(moduleId, pluginsList, newPatchedCode);
+                const newPatchedFactory = evalEach ? (0, eval)(newPatchedSource) : patchedFactory;
 
                 if (!patchedBy.has(patch.plugin)) {
                     patchedBy.add(patch.plugin);
@@ -742,20 +781,13 @@ function patchFactory(moduleId: PropertyKey, originalFactory: AnyModuleFactory):
                 patchedBy.delete(patch.plugin);
             }
         }
-
-        if (!patch.all) {
-            patches.splice(i--, 1);
-        }
     }
 
-    patchedFactory[SYM_ORIGINAL_FACTORY] = originalFactory;
-
-    if (IS_DEV && patchedFactory !== originalFactory) {
-        originalFactory[SYM_PATCHED_SOURCE] = patchedSource;
-        originalFactory[SYM_PATCHED_BY] = patchedBy;
+    if (!evalEach && patchedCode !== unpatchedCode) {
+        patchedFactory = (0, eval)(patchedSource);
     }
 
-    return patchedFactory as PatchedModuleFactory;
+    return { patchedFactory, patchedSource, patchedBy };
 }
 
 function diffErroredPatch(code: string, lastCode: string, match: RegExpMatchArray) {
