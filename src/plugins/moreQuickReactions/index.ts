@@ -59,7 +59,7 @@ export default definePlugin({
 
     patches: [
         {
-            find: "#{intl::MESSAGE_UTILITIES_A11Y_LABEL}",
+            find: 'navId:"message-actions"',
             replacement: {
                 match: /(?<=length>=3\?.{0,40})\.slice\(0,3\)/,
                 replace: ".slice(0,$self.reactionCount)"
