@@ -25,13 +25,9 @@ interface DynamicDropdownSettingOption {
 
 function AnimationSettings(): JSX.Element {
     const animationOptions: DynamicDropdownSettingOption[] = [
-        { label: "Tab Hover Effects (lift + scale)", value: "hover", selected: settings.store.animationHover },
-        { label: "Selected Tab Lift Animation", value: "selection", selected: settings.store.animationSelection },
         { label: "Tab Drag & Drop (ghost + reorder)", value: "drag-drop", selected: settings.store.animationDragDrop },
         { label: "Tab Enter/Exit Slides (creation + closing)", value: "enter-exit", selected: settings.store.animationEnterExit },
         { label: "Icon Pop on Selection (icon scale-up)", value: "icon-pop", selected: settings.store.animationIconPop },
-        { label: "Close Button Rotation", value: "close-rotation", selected: settings.store.animationCloseRotation },
-        { label: "Plus Button Pulse", value: "plus-pulse", selected: settings.store.animationPlusPulse },
         { label: "Mention Badge Glow", value: "mention-glow", selected: settings.store.animationMentionGlow },
         { label: "Compact Mode Expansion", value: "compact-expand", selected: settings.store.animationCompactExpand },
         { label: "Selected Tab Accent Border", value: "selected-border", selected: settings.store.animationSelectedBorder },
@@ -50,13 +46,9 @@ function AnimationSettings(): JSX.Element {
             option.selected = enabledValues.includes(option.value);
         });
 
-        settings.store.animationHover = enabledValues.includes("hover");
-        settings.store.animationSelection = enabledValues.includes("selection");
         settings.store.animationDragDrop = enabledValues.includes("drag-drop");
         settings.store.animationEnterExit = enabledValues.includes("enter-exit");
         settings.store.animationIconPop = enabledValues.includes("icon-pop");
-        settings.store.animationCloseRotation = enabledValues.includes("close-rotation");
-        settings.store.animationPlusPulse = enabledValues.includes("plus-pulse");
         settings.store.animationMentionGlow = enabledValues.includes("mention-glow");
         settings.store.animationCompactExpand = enabledValues.includes("compact-expand");
         settings.store.animationSelectedBorder = enabledValues.includes("selected-border");
@@ -417,18 +409,6 @@ export const settings = definePluginSettings({
         component: AnimationSettings
     },
     // me when storage yes
-    animationHover: {
-        type: OptionType.BOOLEAN,
-        description: "Enable hover lift and scale effects",
-        default: true,
-        hidden: true
-    },
-    animationSelection: {
-        type: OptionType.BOOLEAN,
-        description: "Enable selection animations (border glow, lift)",
-        default: true,
-        hidden: true
-    },
     animationDragDrop: {
         type: OptionType.BOOLEAN,
         description: "Enable drag and drop ghost effects",
@@ -444,18 +424,6 @@ export const settings = definePluginSettings({
     animationIconPop: {
         type: OptionType.BOOLEAN,
         description: "Enable icon scale-up animation on selection",
-        default: true,
-        hidden: true
-    },
-    animationCloseRotation: {
-        type: OptionType.BOOLEAN,
-        description: "Enable rotation animation for close buttons",
-        default: true,
-        hidden: true
-    },
-    animationPlusPulse: {
-        type: OptionType.BOOLEAN,
-        description: "Enable pulse animation for plus button",
         default: true,
         hidden: true
     },

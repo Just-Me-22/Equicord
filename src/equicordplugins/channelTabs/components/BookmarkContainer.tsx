@@ -123,7 +123,18 @@ function BookmarkIcon({ bookmark }: { bookmark: Bookmark | BookmarkFolder; }) {
     );
 }
 
-function FolderBookmarkItem({ bookmark, bookmarks, folderIndex, bookmarkIndex, methods, isCurrentChannel, searchActive }: {
+function Highlighted({ text, query }: { text: string; query?: string; }) {
+    const at = query ? text.toLowerCase().indexOf(query) : -1;
+    if (!query || at < 0) return <>{text}</>;
+
+    return <>
+        {text.slice(0, at)}
+        <mark className={cl("match")}>{text.slice(at, at + query.length)}</mark>
+        {text.slice(at + query.length)}
+    </>;
+}
+
+function FolderBookmarkItem({ bookmark, bookmarks, folderIndex, bookmarkIndex, methods, isCurrentChannel, searchActive, query }: {
     bookmark: Bookmark;
     bookmarks: (Bookmark | BookmarkFolder)[];
     folderIndex: number;
@@ -131,6 +142,7 @@ function FolderBookmarkItem({ bookmark, bookmarks, folderIndex, bookmarkIndex, m
     methods: UseBookmarkMethods;
     isCurrentChannel?: boolean;
     searchActive?: boolean;
+    query?: string;
 }) {
     const { bookmarkNotificationDot } = settings.use(["bookmarkNotificationDot"]);
     const ref = useRef<HTMLDivElement>(null);
@@ -212,6 +224,13 @@ function FolderBookmarkItem({ bookmark, bookmarks, folderIndex, bookmarkIndex, m
                 isReorderOver && canReorderDrop && dropSide === "after" && cl("bookmark-drop-after")
             )}
             onClick={() => navigateToBookmark(bookmark)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={e => {
+                if (e.key !== "Enter" && e.key !== " ") return;
+                e.preventDefault();
+                e.currentTarget.click();
+            }}
             onContextMenu={e => {
                 e.stopPropagation();
                 ContextMenuApi.openContextMenu(e, () => (
@@ -274,15 +293,15 @@ function FolderBookmarkItem({ bookmark, bookmarks, folderIndex, bookmarkIndex, m
             </svg>
             <BookmarkIcon bookmark={bookmark} />
             <BaseText size="sm" className={cl("name-text")}>
-                {bookmark.name}
+                <Highlighted text={bookmark.name} query={query} />
             </BaseText>
             {bookmarkNotificationDot && <NotificationDot channelIds={[bookmark.channelId]} />}
         </div>
     );
 }
 
-function Bookmark(props: BookmarkProps & { isExpanded?: boolean; onToggleFolder?: () => void; isCurrentChannel?: boolean; searchActive?: boolean; }) {
-    const { bookmarks, index, methods, isExpanded, onToggleFolder, isCurrentChannel, searchActive } = props;
+function Bookmark(props: BookmarkProps & { isExpanded?: boolean; onToggleFolder?: () => void; isCurrentChannel?: boolean; searchActive?: boolean; query?: string; }) {
+    const { bookmarks, index, methods, isExpanded, onToggleFolder, isCurrentChannel, searchActive, query } = props;
     const bookmark = bookmarks[index];
     const { bookmarkNotificationDot } = settings.use(["bookmarkNotificationDot"]);
 
@@ -422,6 +441,13 @@ function Bookmark(props: BookmarkProps & { isExpanded?: boolean; onToggleFolder?
                     navigateToBookmark(bookmark);
                 }
             }}
+            role="button"
+            tabIndex={0}
+            onKeyDown={e => {
+                if (e.key !== "Enter" && e.key !== " ") return;
+                e.preventDefault();
+                e.currentTarget.click();
+            }}
             onContextMenu={e => ContextMenuApi.openContextMenu(e, () =>
                 <BookmarkContextMenu {...props} />
             )}
@@ -436,7 +462,7 @@ function Bookmark(props: BookmarkProps & { isExpanded?: boolean; onToggleFolder?
                 </svg>
             )}
             <BaseText size="sm" className={cl("name-text")}>
-                {bookmark.name}
+                <Highlighted text={bookmark.name} query={query} />
             </BaseText>
             {bookmarkNotificationDot && <NotificationDot channelIds={isBookmarkFolder(bookmark)
                 ? bookmark.bookmarks.map(b => b.channelId)
@@ -566,6 +592,11 @@ export default function BookmarkContainer(props: BasicChannelTabsProps & { userI
     }), [bookmarks, methods, searchActive]);
 
     const matchesSearch = (value?: string) => value?.toLowerCase().includes(normalizedSearchQuery) ?? false;
+    const matchCount = searchActive
+        ? (bookmarks ?? []).reduce((sum, one) => sum + (isBookmarkFolder(one)
+            ? matchesSearch(one.name) ? one.bookmarks.length : one.bookmarks.filter(child => matchesSearch(child.name)).length
+            : Number(matchesSearch(one.name))), 0)
+        : 0;
 
     return (
         <div className={cl("bookmark-container")}>
@@ -588,6 +619,7 @@ export default function BookmarkContainer(props: BasicChannelTabsProps & { userI
                                     bookmarks={bookmarks}
                                     methods={methods}
                                     searchActive={searchActive}
+                                    query={normalizedSearchQuery}
                                     isExpanded={false}
                                     isCurrentChannel={
                                         bookmarksIndependentFromTabs &&
@@ -617,6 +649,7 @@ export default function BookmarkContainer(props: BasicChannelTabsProps & { userI
                                 bookmarks={bookmarks}
                                 methods={methods}
                                 searchActive={searchActive}
+                                    query={normalizedSearchQuery}
                                 isExpanded={isExpanded}
                                 onToggleFolder={searchActive ? undefined : () => toggleFolder(i)}
                                 isCurrentChannel={false}
@@ -634,6 +667,7 @@ export default function BookmarkContainer(props: BasicChannelTabsProps & { userI
                                         bookmarkIndex={childIndex}
                                         methods={methods}
                                         searchActive={searchActive}
+                                    query={normalizedSearchQuery}
                                         isCurrentChannel={
                                             bookmarksIndependentFromTabs &&
                                             !channelMatchesActiveTab &&
@@ -650,7 +684,7 @@ export default function BookmarkContainer(props: BasicChannelTabsProps & { userI
                 }
             </HorizontalScroller>
 
-            <div className={classes(cl("bookmark-search-shell"), isSearchOpen && cl("bookmark-search-shell-open"))}>
+            <div className={classes(cl("bookmark-search-shell"), isSearchOpen && cl("bookmark-search-shell-open"), searchActive && cl("search-counted"))}>
                 <div className={cl("bookmark-search-field")}>
                     <TextInput
                         inputRef={searchInputRef}
@@ -671,6 +705,7 @@ export default function BookmarkContainer(props: BasicChannelTabsProps & { userI
                             }
                         }}
                     />
+                    {searchActive && <span className={cl("search-count")}>{matchCount}</span>}
                 </div>
                 <Tooltip text="Search bookmarks" position="left">
                     {p => <button

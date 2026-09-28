@@ -66,13 +66,9 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
         cycleTabForwardKeybind,
         cycleTabBackwardKeybind,
         tabBarPosition,
-        animationHover,
-        animationSelection,
         animationDragDrop,
         animationEnterExit,
         animationIconPop,
-        animationCloseRotation,
-        animationPlusPulse,
         animationMentionGlow,
         animationCompactExpand,
         animationSelectedBorder,
@@ -108,13 +104,9 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
         "cycleTabForwardKeybind",
         "cycleTabBackwardKeybind",
         "tabBarPosition",
-        "animationHover",
-        "animationSelection",
         "animationDragDrop",
         "animationEnterExit",
         "animationIconPop",
-        "animationCloseRotation",
-        "animationPlusPulse",
         "animationMentionGlow",
         "animationCompactExpand",
         "animationSelectedBorder",
@@ -379,9 +371,12 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
     const shouldFollowNewTabButton = newTabButtonBehavior && !tabsOverflow;
     const query = searchQuery.trim().toLowerCase();
     const searchActive = query.length > 0;
+    const matching = searchActive
+        ? openedTabs.map((tab, i) => ({ tab, i })).filter(({ tab }) => tab != null && tabText(tab).includes(query))
+        : [];
 
     const searchBox = (
-        <div className={classes(cl("tab-search-shell"), isSearchOpen && cl("tab-search-shell-open"))}>
+        <div className={classes(cl("tab-search-shell"), isSearchOpen && cl("tab-search-shell-open"), searchActive && cl("search-counted"))}>
             <div className={cl("tab-search-field")}>
                 <TextInput
                     inputRef={searchInputRef}
@@ -399,6 +394,7 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
                         else setIsSearchOpen(false);
                     }}
                 />
+                {searchActive && <span className={cl("search-count")}>{matching.length}</span>}
             </div>
             <Tooltip text="Search tabs" position="left">
                 {p => <button
@@ -424,7 +420,8 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
     const newTabButton = (
         <button
             onClick={() => createTab(props, true)}
-            className={cl("button", "new-button", "hoverable")}
+            className={cl("button", "new-button")}
+            aria-label="New tab"
         >
             <PlusSmallIcon />
         </button>
@@ -436,13 +433,9 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
                 cl("container"),
                 tabBarPosition === "top" && cl("container-top"),
                 IS_MAC && !IS_WEB && tabBarPosition === "top" && cl("container-top-macos"),
-                !animationHover && cl("no-hover-animation"),
-                !animationSelection && cl("no-selection-animation"),
                 !animationDragDrop && cl("no-drag-animation"),
                 !animationEnterExit && cl("no-enter-exit-animation"),
                 !animationIconPop && cl("no-icon-pop-animation"),
-                !animationCloseRotation && cl("no-close-rotation"),
-                !animationPlusPulse && cl("no-plus-animation"),
                 !animationMentionGlow && cl("no-mention-glow"),
                 !animationCompactExpand && cl("no-compact-animation"),
                 !animationSelectedBorder && cl("no-selected-border"),
@@ -461,22 +454,16 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
             style={{ "--tab-width-scale": tabWidthScale / 100, "--tab-height-scale": tabHeightScale / 100 } as React.CSSProperties}
             onContextMenu={e => ContextMenuApi.openContextMenu(e, () => <BasicContextMenu />)}
         >
-            {showBookmarkBar && <>
-                <BookmarkContainer {...props} userId={userId} />
-                <div className={cl("separator")} />
-            </>}
+            {showBookmarkBar && <BookmarkContainer {...props} userId={userId} />}
             <div className={cl("tab-container", { "tab-container-dragging": isTabDragging() })}>
                 <HorizontalScroller
                     customRef={node => { scrollerRef.current = node; }}
                     className={cl("tab-scroller", shouldFollowNewTabButton && "tab-scroller-following")}
                 >
                     {searchActive
-                        ? openedTabs
-                            .map((tab, i) => ({ tab, i }))
-                            .filter(({ tab }) => tab != null && tabText(tab).includes(query))
-                            .map(({ tab, i }) =>
-                                <ChannelTab {...tab} index={i} key={tab.id} searchActive={searchActive} />
-                            )
+                        ? matching.map(({ tab, i }) =>
+                            <ChannelTab {...tab} index={i} key={tab.id} searchActive={searchActive} />
+                        )
                         : segments}
                     {GhostTabs}
                     {shouldFollowNewTabButton && newTabButton}

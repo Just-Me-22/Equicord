@@ -30,22 +30,31 @@
     white-space: nowrap;
     text-overflow: ellipsis;
     margin-left: 0.125rem;
-    font-weight: 400;
-    color: var(--text-muted);
-    transition:
-        color 0.15s ease,
-        font-weight 0.1s ease,
-        transform 0.2s ease;
+    font-weight: 500;
+    color: var(--text-default);
+    transition: color 0.15s ease;
 }
 
 .vc-channeltabs-tab-inner {
-    border-radius: 12px;
+    position: relative;
+    border-radius: 10px;
     padding: 0 28px 0 0;
     display: flex;
     flex-direction: row;
     align-items: center;
     gap: 0.5rem;
-    transition: gap 0.15s ease, padding 0.2s ease-in-out;
+}
+
+.vc-channeltabs-typing-indicator {
+    position: absolute;
+    top: 50%;
+    right: 4px;
+    transform: translateY(-50%);
+}
+
+.vc-channeltabs-tab-compact .vc-channeltabs-typing-indicator {
+    position: static;
+    transform: none;
 }
 
 .vc-channeltabs-tab-container,
@@ -64,6 +73,7 @@
     padding: 4px;
     display: flex;
     flex-direction: column-reverse;
+    gap: 4px;
 
     /* the parent is a flex column that clips, so without this the bar is squeezed from
        its own height down to whatever the app leaves over, and the rows collapse inside
@@ -93,13 +103,6 @@
     overflow: hidden;
 }
 
-.vc-channeltabs-separator {
-    width: 98%;
-    height: 1px;
-    background: var(--input-border-default, var(--input-border));
-    margin: 4px auto;
-}
-
 .vc-channeltabs-scroller {
     display: flex;
     flex-direction: row;
@@ -110,6 +113,12 @@
     padding-bottom: 15px;
     margin-top: -15px;
     margin-bottom: -15px;
+    pointer-events: none;
+}
+
+.vc-channeltabs-scroller > *,
+.vc-channeltabs-tab-scroller > * {
+    pointer-events: auto;
 }
 
 .vc-channeltabs-scroller::-webkit-scrollbar {
@@ -129,6 +138,7 @@
     padding-bottom: 15px;
     margin-top: -15px;
     margin-bottom: -15px;
+    pointer-events: none;
 }
 
 .vc-channeltabs-tab-scroller-following {
@@ -171,10 +181,12 @@
     flex-direction: row;
     max-width: calc(8rem * var(--tab-width-scale, 1));
     padding: 4px 8px;
-    border-radius: 4px;
+    border: 1px solid transparent;
+    border-radius: 6px;
     align-items: center;
     position: relative;
-    transition: transform 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease, background-color 0.14s ease;
+    cursor: pointer;
+    transition: border-color 0.14s ease, background-color 0.14s ease;
 }
 
 .vc-channeltabs-bookmark.vc-channeltabs-wider {
@@ -209,17 +221,16 @@
     flex-direction: row;
     justify-content: space-between;
     align-items: center;
-    border-radius: 12px;
-    width: calc(12rem * var(--tab-width-scale, 1));
-    min-width: 0;
+    border-radius: 10px;
+    width: auto;
+    min-width: calc(8rem * var(--tab-width-scale, 1));
+    max-width: calc(12rem * var(--tab-width-scale, 1));
     margin: 0 4px;
     background-color: color-mix(in srgb, var(--vc-channeltabs-guild, transparent) 14%, transparent);
     border: 1px solid var(--background-mod-muted);
     transition:
-        transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
         background-color 0.15s ease,
         border-color 0.15s ease,
-        box-shadow 0.15s ease,
         opacity 0.15s ease;
     min-height: calc(38px * var(--tab-height-scale, 1));
     padding: calc(6px * var(--tab-height-scale, 1)) 8px;
@@ -242,7 +253,7 @@
     z-index: 10;
     opacity: 0;
     background: var(--hover-color, var(--main-color, var(--brand-experiment, var(--brand-500))));
-    border-radius: 0 11px 11px 0;
+    border-radius: 0 9px 9px 0;
     transition: opacity 0.2s ease;
 }
 
@@ -269,17 +280,18 @@
 }
 
 .vc-channeltabs-tab.vc-channeltabs-wider:not(.vc-channeltabs-tab-compact) {
-    width: calc(16rem * var(--tab-width-scale, 1));
+    max-width: calc(16rem * var(--tab-width-scale, 1));
 }
 
 .vc-channeltabs-tab-compact {
     width: auto;
     min-width: calc(3rem * var(--tab-width-scale, 1));
+    max-width: none;
 }
 
 .vc-channeltabs-tab-compact .vc-channeltabs-tab-inner {
     padding-right: 0;
-    transition: padding 0.4s ease-out;
+    transition: padding-right 0.25s cubic-bezier(0.2, 0, 0, 1);
 }
 
 .vc-channeltabs-tab-compact:hover .vc-channeltabs-tab-inner,
@@ -288,45 +300,41 @@
 }
 
 .vc-channeltabs-tab-compact .vc-channeltabs-name-text {
-    max-width: 0;
+    width: 0;
+    max-width: 200px;
     opacity: 0;
     overflow: hidden;
     margin-left: 0.125rem;
-    transform: translateX(-20px);
+    transform: translateX(-6px);
+    interpolate-size: allow-keywords;
     transition:
-        max-width 0.4s ease-out,
-        opacity 0.4s ease-out,
-        transform 0.4s ease-out;
+        width 0.25s cubic-bezier(0.2, 0, 0, 1),
+        opacity 0.2s ease-out,
+        transform 0.25s cubic-bezier(0.2, 0, 0, 1);
 }
 
 .vc-channeltabs-tab-compact:hover .vc-channeltabs-name-text,
 .vc-channeltabs-tab-compact.vc-channeltabs-tab-selected .vc-channeltabs-name-text {
-    max-width: 200px;
+    width: auto;
     opacity: 1;
     transform: translateX(0);
 }
 
-.vc-channeltabs-tab-selected {
-    transform: translateY(-1px);
+.vc-channeltabs-tab-selected,
+.vc-channeltabs-group-selected {
     background-color: color-mix(in srgb, var(--vc-channeltabs-guild, transparent) 26%, var(--background-base-low));
+    background-image: linear-gradient(var(--main-color, var(--brand-experiment, var(--brand-500))), var(--main-color, var(--brand-experiment, var(--brand-500))));
+    background-position: bottom center;
+    background-repeat: no-repeat;
+    background-size: calc(100% - 16px) 2px;
     border: 1px solid var(--main-color, var(--brand-experiment, var(--brand-500)));
-    border-bottom: 2px solid var(--main-color, var(--brand-experiment, var(--brand-500)));
-    box-shadow: 0 1px 3px rgb(0 0 0 / 20%);
+    box-shadow: var(--elevation-low);
 }
 
 /* stylelint-disable-next-line no-descending-specificity */
-.vc-channeltabs-dark-theme.vc-channeltabs-tab-selected .vc-channeltabs-name-text {
-    font-weight: 600;
-    color: var(--white-500);
-}
-
-/* stylelint-disable-next-line no-descending-specificity */
-.vc-channeltabs-light-theme.vc-channeltabs-tab-selected .vc-channeltabs-name-text {
-    font-weight: 600;
-}
-
+.vc-channeltabs-tab-selected .vc-channeltabs-name-text,
 .vc-channeltabs-tab-selected .vc-channeltabs-guild-acronym-icon span {
-    color: var(--white-500);
+    color: var(--interactive-active);
 }
 
 .vc-channeltabs-tab-container svg {
@@ -335,8 +343,8 @@
 
 .vc-channeltabs-tab-selected svg,
 .vc-channeltabs-tab-selected .vc-channeltabs-close-button svg {
-    color: var(--white-500);
-    fill: var(--white-500);
+    color: var(--interactive-active);
+    fill: var(--interactive-active);
 }
 
 .vc-channeltabs-container [class*="iconContainer"] {
@@ -346,18 +354,24 @@
     transform: scale(0.8);
 }
 
-.vc-channeltabs-container [class*="numberBadge"] {
-    background-color: var(--channeltabs-red) !important;
+.vc-channeltabs-notification-badge {
+    background-color: var(--main-color, var(--brand-experiment, var(--brand-500))) !important;
     color: var(--channeltabs-white);
-    border-radius: 50%;
+    border-radius: 8px;
     min-width: 16px;
     height: 16px;
+    box-sizing: border-box;
     font-size: 11px;
     font-weight: 600;
     display: flex;
+    flex-shrink: 0;
     align-items: center;
     justify-content: center;
     padding: 0 4px;
+}
+
+.vc-channeltabs-notification-badge[data-has-mention="true"] {
+    background-color: var(--status-danger) !important;
 }
 
 .vc-channeltabs-ghost-tab {
@@ -366,15 +380,8 @@
 
 .vc-channeltabs-hoverable:hover,
 .vc-channeltabs-tab:hover:not(.vc-channeltabs-tab-selected) {
-    transform: translateY(-1px) scale(1.02);
-    background-color: color-mix(in srgb, var(--vc-channeltabs-guild, transparent) 22%, var(--background-secondary-alt));
+    background-color: color-mix(in srgb, var(--vc-channeltabs-guild, transparent) 22%, var(--background-mod-normal));
     border-color: var(--hover-color, var(--border-subtle));
-    box-shadow: 0 2px 4px rgb(0 0 0 / 10%);
-}
-
-.vc-channeltabs-tab:active:not(.vc-channeltabs-tab-selected) {
-    transform: translateY(0) scale(0.98);
-    transition-duration: 0.05s;
 }
 
 .vc-channeltabs-button {
@@ -393,7 +400,7 @@
 
 .vc-channeltabs-bookmark-search-shell-open,
 .vc-channeltabs-tab-search-shell-open {
-    z-index: 3;
+    width: 180px;
 }
 
 .vc-channeltabs-bookmark-search-field,
@@ -401,26 +408,44 @@
     position: absolute;
     right: 0;
     top: 50%;
-    width: 0;
+    width: 100%;
     opacity: 0;
     pointer-events: none;
-    overflow: hidden;
-    transform: translateY(-50%) scaleX(0.92);
-    transform-origin: right center;
-    transition: width 0.18s ease, opacity 0.15s ease, transform 0.18s ease;
+    transform: translate(8px, -50%);
+    transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
 .vc-channeltabs-bookmark-search-shell-open .vc-channeltabs-bookmark-search-field,
 .vc-channeltabs-tab-search-shell-open .vc-channeltabs-tab-search-field {
-    width: 160px;
     opacity: 1;
     pointer-events: auto;
-    transform: translateY(-50%) scaleX(1);
+    transform: translate(0, -50%);
 }
 
 .vc-channeltabs-bookmark-search-input,
 .vc-channeltabs-tab-search-input {
     padding-right: 34px !important;
+}
+
+.vc-channeltabs-search-counted .vc-channeltabs-bookmark-search-input,
+.vc-channeltabs-search-counted .vc-channeltabs-tab-search-input {
+    padding-right: 58px !important;
+}
+
+.vc-channeltabs-search-count {
+    position: absolute;
+    top: 50%;
+    right: 32px;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+    transform: translateY(-50%);
+}
+
+.vc-channeltabs-match {
+    background-color: color-mix(in srgb, var(--main-color, var(--brand-experiment, var(--brand-500))) 35%, transparent);
+    color: inherit;
 }
 
 .vc-channeltabs-bookmark-search-button,
@@ -430,7 +455,7 @@
     justify-content: center;
     width: 28px;
     height: 28px;
-    border-radius: 8px;
+    border-radius: 6px;
     position: absolute;
     right: 0;
     top: 0;
@@ -447,119 +472,69 @@
 .vc-channeltabs-new-button {
     padding: 4px;
     margin: 0 4px;
-    border-radius: 4px;
+    border-radius: 6px;
     background-color: var(--background-base-low);
-    transition: background-color 0.2s ease, transform 0.2s ease;
+    transition: background-color 0.15s ease;
     flex-shrink: 0;
 }
 
 .vc-channeltabs-new-button:hover {
     background-color: var(--background-mod-subtle);
-    transform: scale(1.1);
-}
-
-.vc-channeltabs-new-button:active {
-    transform: scale(0.95);
 }
 
 /* stylelint-disable-next-line no-descending-specificity */
-.vc-channeltabs-new-button svg {
-    transition: color 0.2s ease;
-}
-
 .vc-channeltabs-new-button:hover svg {
     color: var(--interactive-icon-hover);
-    animation: vc-channeltabs-plus-spin 0.3s ease-in-out;
-}
-
-@keyframes vc-channeltabs-plus-spin {
-    0% {
-        transform: rotate(0deg) scale(1);
-    }
-
-    50% {
-        transform: rotate(90deg) scale(1.15);
-    }
-
-    100% {
-        transform: rotate(90deg) scale(1);
-    }
 }
 
 .vc-channeltabs-close-button {
-    height: 1rem;
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    width: 20px;
+    height: 20px;
     padding: 0;
     margin: 0 0 0 4px;
-    border-radius: 50%;
+    border-radius: 6px;
     color: var(--text-muted);
     transition:
         color 0.15s ease,
-        background-color 0.15s ease,
-        transform 0.2s ease-in-out;
+        background-color 0.15s ease;
 }
 
 .vc-channeltabs-close-button:hover {
     background-color: var(--background-mod-subtle);
-    transform: rotate(90deg);
-}
-
-.vc-channeltabs-close-button:active {
-    transform: rotate(90deg) scale(0.9);
 }
 
 .vc-channeltabs-tab-selected .vc-channeltabs-close-button {
-    color: var(--white-500);
+    color: var(--interactive-active);
 }
 
 .vc-channeltabs-tab-selected .vc-channeltabs-close-button:hover {
-    background-color: color-mix(in srgb, white 15%, transparent);
-    transform: rotate(90deg);
-}
-
-.vc-channeltabs-tab-selected .vc-channeltabs-close-button:active {
-    transform: rotate(90deg) scale(0.9);
+    background-color: var(--background-mod-strong);
 }
 
 .vc-channeltabs-close-button-compact {
     position: absolute;
     opacity: 0;
-    width: 2rem;
-    height: 2rem;
+    width: 24px;
+    height: 24px;
     margin-left: 0.35rem;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 50%;
-    transform: translateX(-10px) scale(0.8);
+    border-radius: 6px;
+    transform: translateX(-4px);
     transition:
-        opacity 0.3s ease-out 0.2s,
-        transform 0.3s ease-out 0.2s;
+        opacity 0.2s ease-out 0.1s,
+        transform 0.2s ease-out 0.1s;
     right: 4px;
 }
 
 .vc-channeltabs-tab-compact:hover .vc-channeltabs-close-button-compact,
 .vc-channeltabs-tab-compact.vc-channeltabs-tab-selected .vc-channeltabs-close-button-compact {
     opacity: 1;
-    transform: translateX(0) scale(1);
-}
-
-/* stylelint-disable-next-line no-descending-specificity */
-.vc-channeltabs-close-button.vc-channeltabs-close-button-compact:hover {
-    background-color: var(--background-mod-subtle);
-    transform: translateX(0) scale(1) rotate(90deg) !important;
-    transition:
-        opacity 0.3s ease-out 0.2s,
-        transform 0.2s ease-in-out,
-        background-color 0.15s ease;
-}
-
-/* stylelint-disable-next-line no-descending-specificity */
-.vc-channeltabs-close-button.vc-channeltabs-close-button-compact:active {
-    transform: translateX(0) scale(0.9) rotate(90deg) !important;
-    transition:
-        opacity 0.3s ease-out 0.2s,
-        transform 0.2s ease-in-out,
-        background-color 0.15s ease;
+    transform: none;
 }
 
 .vc-channeltabs-preview-tab {
@@ -569,7 +544,7 @@
     width: calc(12rem * var(--tab-width-scale, 1));
     padding: 0.125rem 0;
     min-width: 0;
-    border-radius: 0.25rem;
+    border-radius: 6px;
     border: 1px solid var(--input-border-default, var(--input-border));
 }
 
@@ -629,14 +604,14 @@
 /* Enhance glow for selected tabs with mentions */
 .vc-channeltabs-tab-selected.vc-channeltabs-tab-mention {
     box-shadow:
-        0 1px 3px rgb(0 0 0 / 20%),
+        var(--elevation-low),
         0 0 12px color-mix(in srgb, var(--danger-color, rgb(242 63 66)) 80%, transparent),
         0 0 24px color-mix(in srgb, var(--danger-color, rgb(242 63 66)) 50%, transparent);
 }
 
 /* Pink Nitro glow effect (easter egg) */
 .vc-channeltabs-tab-nitro {
-    box-shadow: 0 0 10px rgb(255 115 250 / 70%), 0 0 20px rgb(255 115 250 / 40%);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--channeltabs-pink) 70%, transparent), 0 0 20px color-mix(in srgb, var(--channeltabs-pink) 40%, transparent);
 }
 
 .vc-channeltabs-tab-nitro:hover {
@@ -648,29 +623,29 @@
     /* stylelint-disable-next-line rule-empty-line-before */
     0%,
     100% {
-        box-shadow: 0 0 10px rgb(255 115 250 / 70%), 0 0 20px rgb(255 115 250 / 40%);
+        box-shadow: 0 0 10px color-mix(in srgb, var(--channeltabs-pink) 70%, transparent), 0 0 20px color-mix(in srgb, var(--channeltabs-pink) 40%, transparent);
     }
 
     50% {
-        box-shadow: 0 0 16px rgb(255 115 250 / 90%), 0 0 32px rgb(255 115 250 / 60%);
+        box-shadow: 0 0 16px color-mix(in srgb, var(--channeltabs-pink) 90%, transparent), 0 0 32px color-mix(in srgb, var(--channeltabs-pink) 60%, transparent);
     }
 }
 
 /* Enhanced Nitro glow for selected tab */
 .vc-channeltabs-tab-selected.vc-channeltabs-tab-nitro {
     box-shadow:
-        0 1px 3px rgb(0 0 0 / 20%),
-        0 0 16px rgb(255 115 250 / 90%),
-        0 0 32px rgb(255 115 250 / 60%);
+        var(--elevation-low),
+        0 0 16px color-mix(in srgb, var(--channeltabs-pink) 90%, transparent),
+        0 0 32px color-mix(in srgb, var(--channeltabs-pink) 60%, transparent);
 }
 
 /* Nitro icon gradient animation */
 .vc-channeltabs-tab-nitro .vc-channeltabs-tab-inner svg {
-    filter: drop-shadow(0 0 2px rgb(255 115 250 / 80%));
+    filter: drop-shadow(0 0 2px color-mix(in srgb, var(--channeltabs-pink) 80%, transparent));
 }
 
 .vc-channeltabs-tab-nitro .vc-channeltabs-tab-inner svg path {
-    fill: rgb(255 115 250) !important;
+    fill: var(--channeltabs-pink) !important;
 }
 
 .vc-channeltabs-tab-nitro:hover .vc-channeltabs-tab-inner svg path {
@@ -682,11 +657,11 @@
     /* stylelint-disable-next-line rule-empty-line-before */
     0%,
     100% {
-        fill: rgb(255 115 250);
+        fill: var(--channeltabs-pink);
     }
 
     50% {
-        fill: rgb(255 180 250);
+        fill: color-mix(in srgb, var(--channeltabs-pink) 60%, var(--interactive-active));
     }
 }
 
@@ -700,13 +675,13 @@
     content: "";
     position: absolute;
     inset: 0;
-    border-radius: 11px;
+    border-radius: 9px;
     background: linear-gradient(135deg,
             transparent,
             transparent 25%,
-            rgb(114 137 218) 40%,
-            rgb(88 101 242) 50%,
-            rgb(71 82 196) 60%,
+            color-mix(in srgb, var(--brand-500) 70%, var(--interactive-active)) 40%,
+            var(--brand-500) 50%,
+            var(--brand-560, var(--brand-500)) 60%,
             transparent 75%,
             transparent);
     background-size: 300% 300%;
@@ -724,8 +699,8 @@
     content: "";
     position: absolute;
     inset: 0;
-    border-radius: 11px;
-    box-shadow: 0 0 8px 1px rgb(114 137 218 / 60%);
+    border-radius: 9px;
+    box-shadow: 0 0 8px 1px color-mix(in srgb, var(--brand-500) 60%, transparent);
     pointer-events: none;
 }
 
@@ -754,20 +729,13 @@
 }
 
 @keyframes vc-channeltabs-quests-glow {
-    0% {
-        box-shadow: 0 0 8px 1px rgb(114 137 218 / 60%);
-    }
-
-    33% {
-        box-shadow: 0 0 8px 1px rgb(88 101 242 / 60%);
-    }
-
-    66% {
-        box-shadow: 0 0 8px 1px rgb(71 82 196 / 60%);
-    }
-
+    0%,
     100% {
-        box-shadow: 0 0 8px 1px rgb(114 137 218 / 60%);
+        box-shadow: 0 0 8px 1px color-mix(in srgb, var(--brand-500) 45%, transparent);
+    }
+
+    50% {
+        box-shadow: 0 0 8px 1px color-mix(in srgb, var(--brand-500) 75%, transparent);
     }
 }
 
@@ -777,7 +745,7 @@
 }
 
 .vc-channeltabs-tab-selected.vc-channeltabs-tab-quests-active::after {
-    box-shadow: 0 0 12px 2px rgb(114 137 218 / 80%);
+    box-shadow: 0 0 12px 2px color-mix(in srgb, var(--brand-500) 80%, transparent);
 }
 
 .vc-channeltabs-tab-selected.vc-channeltabs-tab-quests-active:hover::after {
@@ -785,20 +753,13 @@
 }
 
 @keyframes vc-channeltabs-quests-glow-selected {
-    0% {
-        box-shadow: 0 0 12px 2px rgb(114 137 218 / 80%);
-    }
-
-    33% {
-        box-shadow: 0 0 12px 2px rgb(88 101 242 / 80%);
-    }
-
-    66% {
-        box-shadow: 0 0 12px 2px rgb(71 82 196 / 80%);
-    }
-
+    0%,
     100% {
-        box-shadow: 0 0 12px 2px rgb(114 137 218 / 80%);
+        box-shadow: 0 0 12px 2px color-mix(in srgb, var(--brand-500) 65%, transparent);
+    }
+
+    50% {
+        box-shadow: 0 0 12px 2px color-mix(in srgb, var(--brand-500) 90%, transparent);
     }
 }
 
@@ -813,20 +774,12 @@
 @keyframes vc-channeltabs-tab-close {
     0% {
         opacity: 1;
-        transform: scale(1);
-        max-width: 100%;
-        margin: 0 4px;
-    }
-
-    50% {
-        opacity: 0.5;
-        transform: scale(0.95);
-        max-width: 50%;
+        transform: none;
     }
 
     100% {
         opacity: 0;
-        transform: scale(0.9) translateX(-20px);
+        transform: scale(0.95) translateY(4px);
     }
 }
 
@@ -880,7 +833,6 @@
 /* Drag and drop visual feedback */
 .vc-channeltabs-tab-dragging {
     opacity: 0.5;
-    transform: rotate(3deg);
     cursor: grabbing !important;
     z-index: 1000;
     transition: none !important;
@@ -903,37 +855,11 @@
     bottom: 0;
     width: 3px;
     background: var(--main-color, var(--brand-experiment, var(--brand-500)));
-    border-radius: 3px;
-    animation: vc-channeltabs-drop-indicator 0.5s ease-in-out infinite;
-}
-
-@keyframes vc-channeltabs-drop-indicator {
-
-    /* stylelint-disable-next-line rule-empty-line-before */
-    0%,
-    100% {
-        opacity: 0.6;
-        box-shadow: 0 0 8px var(--main-color, var(--brand-experiment, var(--brand-500)));
-    }
-
-    50% {
-        opacity: 1;
-        box-shadow: 0 0 12px var(--main-color, var(--brand-experiment, var(--brand-500)));
-    }
+    border-radius: 2px;
 }
 
 /* animation override settings */
 /* stylelint-disable no-descending-specificity */
-
-/* Hover animation - disable if setting is off */
-.vc-channeltabs-container.vc-channeltabs-no-hover-animation .vc-channeltabs-tab:hover:not(.vc-channeltabs-tab-selected) {
-    transform: none !important;
-}
-
-/* Selection animation - disable if setting is off */
-.vc-channeltabs-container.vc-channeltabs-no-selection-animation .vc-channeltabs-tab-selected {
-    transform: none !important;
-}
 
 /* Drag & drop animation - disable if setting is off */
 .vc-channeltabs-container.vc-channeltabs-no-drag-animation .vc-channeltabs-tab-dragging {
@@ -979,7 +905,7 @@
 /* Selected tab border - disable if setting is off */
 .vc-channeltabs-container.vc-channeltabs-no-selected-border .vc-channeltabs-tab-selected {
     border: 1px solid var(--background-mod-muted) !important;
-    border-bottom: 1px solid var(--background-mod-muted) !important;
+    background-image: none !important;
 }
 
 /* Selected tab background - disable if setting is off */
@@ -994,44 +920,10 @@
     box-shadow: none !important;
 }
 
-/* Close button rotation - disable if setting is off */
-.vc-channeltabs-container.vc-channeltabs-no-close-rotation .vc-channeltabs-tab-selected .vc-channeltabs-close-button:hover {
-    transform: none !important;
-}
-
-.vc-channeltabs-container.vc-channeltabs-no-close-rotation .vc-channeltabs-close-button:hover {
-    transform: none !important;
-}
-
-.vc-channeltabs-container.vc-channeltabs-no-close-rotation .vc-channeltabs-tab-selected .vc-channeltabs-close-button:active {
-    transform: none !important;
-}
-
-.vc-channeltabs-container.vc-channeltabs-no-close-rotation .vc-channeltabs-close-button:active {
-    transform: none !important;
-}
-
-/* Plus button animation - disable if setting is off */
-.vc-channeltabs-container.vc-channeltabs-no-plus-animation .vc-channeltabs-new-button:hover {
-    transform: none !important;
-}
-
-.vc-channeltabs-container.vc-channeltabs-no-plus-animation .vc-channeltabs-new-button:active {
-    transform: none !important;
-}
-
-.vc-channeltabs-container.vc-channeltabs-no-plus-animation .vc-channeltabs-new-button:hover svg {
-    animation: none !important;
-}
-
 /* Mention glow - disable if setting is off */
 .vc-channeltabs-container.vc-channeltabs-no-mention-glow .vc-channeltabs-tab.vc-channeltabs-tab-mention {
     animation: none !important;
-    box-shadow: 0 1px 3px rgb(0 0 0 / 20%) !important;
-}
-
-.vc-channeltabs-container.vc-channeltabs-no-mention-glow .vc-channeltabs-tab-selected.vc-channeltabs-tab-mention {
-    box-shadow: 0 1px 3px rgb(0 0 0 / 20%) !important;
+    box-shadow: var(--elevation-low) !important;
 }
 
 /* Compact mode expansion animation - disable if setting is off */
@@ -1080,7 +972,7 @@
 .vc-channeltabs-container.vc-channeltabs-no-compact-auto-expand .vc-channeltabs-tab-compact.vc-channeltabs-tab-selected .vc-channeltabs-name-text {
     max-width: 0 !important;
     opacity: 0 !important;
-    transform: translateX(-20px) !important;
+    transform: translateX(-6px) !important;
 }
 
 /* Hide close button on selected compact tabs when auto-expand is disabled */
@@ -1097,7 +989,7 @@
 .vc-channeltabs-container.vc-channeltabs-no-compact-hover-expand .vc-channeltabs-tab-compact:hover .vc-channeltabs-name-text {
     max-width: 0 !important;
     opacity: 0 !important;
-    transform: translateX(-20px) !important;
+    transform: translateX(-6px) !important;
 }
 
 /* Hide close button on hover for compact tabs when hover-expand is disabled */
@@ -1115,7 +1007,6 @@
 
 .vc-channeltabs-bookmark.vc-channeltabs-bookmark-dragging {
     opacity: 0.55;
-    transform: scale(0.98);
 }
 
 .vc-channeltabs-bookmark.vc-channeltabs-bookmark-drop-target {
@@ -1130,9 +1021,8 @@
     top: 3px;
     bottom: 3px;
     width: 2px;
-    border-radius: 999px;
+    border-radius: 2px;
     background-color: var(--main-color, var(--brand-experiment, var(--brand-500)));
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--main-color, var(--brand-experiment, var(--brand-500))) 30%, transparent);
 }
 
 .vc-channeltabs-bookmark.vc-channeltabs-bookmark-drop-before::before {
@@ -1143,48 +1033,27 @@
     right: -3px;
 }
 
-.vc-channeltabs-bookmark.vc-channeltabs-bookmark-drop-before {
-    transform: translateX(5px);
-}
-
-.vc-channeltabs-bookmark.vc-channeltabs-bookmark-drop-after {
-    transform: translateX(-5px);
-}
-
 .vc-channeltabs-bookmark.vc-channeltabs-folder-drop-target {
     background-color: color-mix(in srgb, var(--main-color, var(--brand-experiment, var(--brand-500))) 22%, transparent);
-    border: 1px solid color-mix(in srgb, var(--main-color, var(--brand-experiment, var(--brand-500))) 80%, var(--border-subtle));
-    transform: scale(1.03);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--main-color, var(--brand-experiment, var(--brand-500))) 20%, transparent);
+    border-color: color-mix(in srgb, var(--main-color, var(--brand-experiment, var(--brand-500))) 80%, var(--border-subtle));
 }
 
 .vc-channeltabs-bookmark.vc-channeltabs-folder-expanded {
     background-color: var(--background-mod-strong);
 }
 
-/* Folder item styling - indented and visually connected to folder */
 .vc-channeltabs-bookmark.vc-channeltabs-folder-item {
-    margin-left: 0.5rem;
-    border-left: 2px solid var(--background-mod-muted);
-    padding-left: 0.5rem;
-    opacity: 0.9;
-    background-color: var(--background-secondary-alt);
-}
-
-.vc-channeltabs-bookmark.vc-channeltabs-folder-item:hover {
-    opacity: 1;
+    margin-left: 2px;
     background-color: var(--background-mod-subtle);
 }
 
-/* Active bookmark visual indicator */
-.vc-channeltabs-bookmark.vc-channeltabs-bookmark-active {
-    border: 1px solid var(--main-color, var(--brand-experiment, var(--brand-500)));
-    box-shadow: 0 0 4px var(--main-color, var(--brand-experiment, var(--brand-500)));
-    background-color: color-mix(in srgb, var(--main-color, var(--brand-experiment, var(--brand-500))) 15%, transparent);
+.vc-channeltabs-bookmark.vc-channeltabs-folder-item:hover {
+    background-color: var(--background-mod-strong);
 }
 
-.vc-channeltabs-bookmark.vc-channeltabs-bookmark-active:hover {
-    box-shadow: 0 0 6px var(--hover-color, var(--main-color, var(--brand-experiment, var(--brand-500))));
+.vc-channeltabs-bookmark.vc-channeltabs-bookmark-active {
+    border-color: var(--main-color, var(--brand-experiment, var(--brand-500)));
+    background-color: color-mix(in srgb, var(--main-color, var(--brand-experiment, var(--brand-500))) 15%, transparent);
 }
 
 /* keybind Settings Styles */
@@ -1203,12 +1072,7 @@
     gap: 16px;
     padding: 12px;
     background-color: var(--background-secondary-alt);
-    border-radius: 8px;
-    transition: background-color 0.2s ease;
-}
-
-.channelTabs-keybind-input:hover {
-    background-color: var(--background-secondary-alt);
+    border-radius: 10px;
 }
 
 .channelTabs-keybind-info {
@@ -1229,7 +1093,7 @@
     padding: 8px 16px;
     background-color: var(--background-base-low);
     border: 2px solid var(--input-border-default, var(--input-border));
-    border-radius: 8px;
+    border-radius: 6px;
     cursor: pointer;
     min-width: 140px;
     text-align: center;
@@ -1250,13 +1114,11 @@
 .channelTabs-keybind-button:hover:not(:disabled) {
     background-color: var(--background-mod-subtle);
     border-color: var(--hover-color, var(--main-color, var(--brand-experiment, var(--brand-500))));
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgb(0 0 0 / 20%);
+    box-shadow: var(--elevation-medium, var(--elevation-low));
 }
 
 .channelTabs-keybind-button:active:not(:disabled) {
-    transform: translateY(0);
-    box-shadow: 0 1px 4px rgb(0 0 0 / 20%);
+    box-shadow: var(--elevation-low);
 }
 
 .channelTabs-keybind-button:disabled {
@@ -1314,24 +1176,22 @@
 
 /* Tab Number Badge Styles */
 .vc-channeltabs-tab-number-badge {
-    background-color: rgb(0 0 0 / 25%);
+    background-color: var(--background-mod-strong);
     color: var(--text-default);
-    border-radius: 50%;
-    width: 20px;
-    height: 20px;
-    min-width: 20px;
-    max-width: 20px;
-    font-size: 12px;
-    font-weight: 700;
+    border-radius: 8px;
+    width: 16px;
+    height: 16px;
+    min-width: 16px;
+    max-width: 16px;
+    font-size: 11px;
+    font-weight: 600;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 0;
     transition:
         opacity 0.2s ease-out,
-        transform 0.2s ease-out,
-        max-width 0.2s ease-out,
-        margin 0.2s ease-out;
+        transform 0.2s ease-out;
     flex-shrink: 0;
     overflow: hidden;
 }
@@ -1339,26 +1199,11 @@
 /* position: Left */
 .vc-channeltabs-tab-number-badge[data-position="left"] {
     margin-right: 0.5rem;
-    transition:
-        opacity 0.2s ease-out,
-        transform 0.2s ease-out,
-        max-width 0.2s ease-out,
-        margin-right 0.2s ease-out;
 }
 
 /* position: Right */
 .vc-channeltabs-tab-number-badge[data-position="right"] {
     margin-left: 0.5rem;
-    transition:
-        opacity 0.2s ease-out,
-        transform 0.2s ease-out,
-        max-width 0.2s ease-out,
-        margin-left 0.2s ease-out;
-}
-
-/* hover effect (slight scale up) */
-.vc-channeltabs-tab:hover .vc-channeltabs-tab-number-badge {
-    transform: scale(1.05);
 }
 
 /* directional slide animations for compact mode */
@@ -1420,29 +1265,14 @@
    for a bar at the top: they lift upwards, the selected one carries its accent along its
    bottom edge and drops a shadow downwards. against the bottom of the window all three
    point the wrong way. */
-.vc-channeltabs-container:not(.vc-channeltabs-container-top) .vc-channeltabs-tab-selected {
-    transform: translateY(1px);
-    border-top: 2px solid var(--main-color, var(--brand-experiment, var(--brand-500)));
-    border-bottom: 1px solid var(--main-color, var(--brand-experiment, var(--brand-500)));
-    box-shadow: 0 -1px 3px rgb(0 0 0 / 20%);
-}
-
-.vc-channeltabs-container:not(.vc-channeltabs-container-top) .vc-channeltabs-tab:hover:not(.vc-channeltabs-tab-selected) {
-    transform: translateY(1px) scale(1.02);
-    box-shadow: 0 -2px 4px rgb(0 0 0 / 10%);
-}
-
-.vc-channeltabs-container:not(.vc-channeltabs-container-top).vc-channeltabs-no-selected-border .vc-channeltabs-tab-selected {
-    border-top: 1px solid var(--background-mod-muted) !important;
+.vc-channeltabs-container:not(.vc-channeltabs-container-top) .vc-channeltabs-tab-selected,
+.vc-channeltabs-container:not(.vc-channeltabs-container-top) .vc-channeltabs-group-selected {
+    background-position: top center;
 }
 
 /* hidden until you hover the bar, or until a tab wants your attention, then it floats over the chat */
 .vc-channeltabs-container-autohide {
     position: relative;
-}
-
-.vc-channeltabs-container-autohide .vc-channeltabs-separator {
-    display: none;
 }
 
 .vc-channeltabs-container-autohide .vc-channeltabs-tab-container {
@@ -1484,13 +1314,13 @@
     margin: 0 4px;
     padding: 2px;
     border: 1px solid var(--background-mod-muted);
-    border-radius: 14px;
+    border-radius: 10px;
     background-color: var(--background-mod-subtle);
     transition: border-color 0.15s ease;
 }
 
-.vc-channeltabs-group-selected {
-    border-color: var(--brand-500);
+.vc-channeltabs-group.vc-channeltabs-group-selected {
+    border-color: var(--main-color, var(--brand-experiment, var(--brand-500)));
 }
 
 .vc-channeltabs-group-head {
@@ -1504,7 +1334,7 @@
     display: flex;
     align-items: center;
     padding: 4px;
-    border-radius: 8px;
+    border-radius: 6px;
 }
 
 .vc-channeltabs-group-chevron-icon {
@@ -1529,10 +1359,11 @@
 .vc-channeltabs-group-count {
     flex-shrink: 0;
     padding: 0 6px;
-    border-radius: 8px;
+    border-radius: 6px;
     background-color: var(--background-mod-subtle);
     color: var(--text-muted);
-    font-size: 0.75rem;
+    font-size: 11px;
+    font-weight: 600;
     line-height: 1.125rem;
 }
 
@@ -1540,9 +1371,6 @@
     display: grid;
     grid-template-columns: 0fr;
     visibility: hidden;
-    transition:
-        grid-template-columns 0.2s ease,
-        visibility 0s linear 0.2s;
 }
 
 .vc-channeltabs-group:not(.vc-channeltabs-group-expanded) .vc-channeltabs-group-members {
@@ -1552,9 +1380,6 @@
 .vc-channeltabs-group-expanded .vc-channeltabs-group-members {
     grid-template-columns: 1fr;
     visibility: visible;
-    transition:
-        grid-template-columns 0.2s ease,
-        visibility 0s;
 }
 
 .vc-channeltabs-group-members-inner {
@@ -1563,25 +1388,27 @@
     align-items: center;
     min-width: 0;
     overflow: hidden;
+    opacity: 0;
+    transition: opacity 0.15s ease;
 }
 
-.vc-channeltabs-tab-group-target {
-    border-color: var(--brand-500);
-    box-shadow: inset 0 0 0 1px var(--brand-500);
+.vc-channeltabs-group-expanded .vc-channeltabs-group-members-inner {
+    opacity: 1;
 }
 
-.vc-channeltabs-container.vc-channeltabs-no-group-expand-animation .vc-channeltabs-group-members,
+.vc-channeltabs-tab-group-target,
+.vc-channeltabs-group-drop-target {
+    border-color: var(--main-color, var(--brand-experiment, var(--brand-500)));
+    box-shadow: inset 0 0 0 1px var(--main-color, var(--brand-experiment, var(--brand-500)));
+}
+
+.vc-channeltabs-container.vc-channeltabs-no-group-expand-animation .vc-channeltabs-group-members-inner,
 .vc-channeltabs-container.vc-channeltabs-no-group-expand-animation .vc-channeltabs-group-chevron-icon {
     transition: none;
 }
 
-.vc-channeltabs-group-drop-target {
-    border-color: var(--brand-500);
-    box-shadow: inset 0 0 0 1px var(--brand-500);
-}
-
 .vc-channeltabs-group-label:hover {
-    background-color: var(--background-secondary-alt);
+    background-color: var(--background-mod-normal);
     border-radius: 10px;
 }
 
@@ -1597,12 +1424,8 @@
     padding: 4px;
     border: 1px solid var(--background-mod-muted);
     border-radius: 10px;
-
-    /* tinted from whatever the client's surface is, so it follows a theme rather than
-       picking a colour. the blur only exists while the group is hovered. */
-    background-color: color-mix(in oklab, var(--background-primary) 82%, transparent);
-    backdrop-filter: blur(12px);
-    box-shadow: 0 4px 12px rgb(0 0 0 / 25%);
+    background-color: var(--background-floating);
+    box-shadow: var(--elevation-high);
     overflow-y: auto;
 }
 
@@ -1613,7 +1436,7 @@
     justify-content: space-between;
     gap: 0.5rem;
     padding: 5px 8px;
-    border-radius: 8px;
+    border-radius: 6px;
     text-align: left;
 }
 
@@ -1623,4 +1446,14 @@
 
 .vc-channeltabs-group-flyout-item-selected {
     background-color: var(--background-base-low);
+}
+
+.vc-channeltabs-button:focus-visible,
+.vc-channeltabs-bookmark:focus-visible,
+.vc-channeltabs-group-chevron:focus-visible,
+.vc-channeltabs-group-label:focus-visible,
+.vc-channeltabs-group-flyout-item:focus-visible,
+.channelTabs-keybind-button:focus-visible {
+    outline: 2px solid var(--focus-primary);
+    outline-offset: -2px;
 }

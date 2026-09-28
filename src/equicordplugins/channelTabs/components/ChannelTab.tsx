@@ -134,12 +134,6 @@ export const NotificationDot = ({ channelIds, onMention }: { channelIds: string[
         <div
             data-has-mention={hasMention}
             className={classes(cl("notification-badge"), dotStyles.numberBadge, dotStyles.baseShapeRound)}
-            style={{
-                width: "16px"
-            }}
-            ref={node => node?.style.setProperty("background-color",
-                hasMention ? "var(--danger-color, var(--red-400))" : "var(--main-color, var(--brand-experiment, var(--brand-500)))", "important"
-            )}
         >
             {badgeText}
         </div> : null;
@@ -560,7 +554,8 @@ export default function ChannelTab(props: ChannelTabsProps & { index: number; se
         </button>
 
         {openedTabs.length > 1 && <button
-            className={cl("button", "close-button", { "close-button-compact": compact, "hoverable": !compact })}
+            className={cl("button", "close-button", { "close-button-compact": compact })}
+            aria-label="Close tab"
             onClick={() => {
                 setIsClosing(true);
                 setTimeout(() => closeTab(id), 150);
