@@ -15,6 +15,7 @@ export interface ClassMap {
     name: Map<string, string>;
     /** "message" to every class currently carrying that name */
     hash: Map<string, string[]>;
+    owner: Map<string, { module: string; key: string; }>;
     modules: number;
     classes: number;
     ms: number;
@@ -22,7 +23,7 @@ export interface ClassMap {
 
 let map: ClassMap | null = null;
 
-function harvest(exports: object, name: Map<string, string>, hash: Map<string, string[]>) {
+function harvest(exports: object, name: Map<string, string>, hash: Map<string, string[]>, owner: ClassMap["owner"], module: string) {
     for (const key in exports) {
         const value = (exports as Record<string, unknown>)[key];
         if (typeof value !== "string" || value.length > 200) continue;
@@ -33,6 +34,7 @@ function harvest(exports: object, name: Map<string, string>, hash: Map<string, s
             if (!hit || name.has(token)) continue;
 
             name.set(token, hit[1]);
+            owner.set(token, { module, key });
             const carrying = hash.get(hit[1]);
             if (carrying) carrying.push(token);
             else hash.set(hit[1], [token]);
@@ -50,6 +52,7 @@ export function build(): ClassMap {
     const started = performance.now();
     const name = new Map<string, string>();
     const hash = new Map<string, string[]>();
+    const owner: ClassMap["owner"] = new Map();
     let modules = 0;
 
     for (const id in cache) {
@@ -59,13 +62,13 @@ export function build(): ClassMap {
         modules++;
         // webpack exports carry getters, and some of discord's throw when read
         try {
-            harvest(exports, name, hash);
+            harvest(exports, name, hash, owner, id);
             const inner = (exports as { default?: unknown; }).default;
-            if (inner && typeof inner === "object") harvest(inner, name, hash);
+            if (inner && typeof inner === "object") harvest(inner, name, hash, owner, id);
         } catch { }
     }
 
-    map = { name, hash, modules, classes: name.size, ms: performance.now() - started };
+    map = { name, hash, owner, modules, classes: name.size, ms: performance.now() - started };
     return map;
 }
 

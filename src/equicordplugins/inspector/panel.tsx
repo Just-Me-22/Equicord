@@ -4,32 +4,38 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import { Settings } from "@api/Settings";
+import ErrorBoundary from "@components/ErrorBoundary";
 import { ExpandableSection } from "@components/ExpandableCard";
 import { HeadingSecondary } from "@components/Heading";
 import { PluginNative } from "@utils/types";
-import { Button, Modal, openModal, Text, TextInput, useEffect, useMemo, useRef, useState } from "@webpack/common";
+import { createRoot, React, Text, TextArea, TextInput, Toasts, useEffect, useMemo, useRef, useState } from "@webpack/common";
+import type { Root } from "react-dom/client";
 
 import { read } from "./classMap";
-import { arm, Point, thumbnail } from "./picker";
+import { cl, Lines } from "./lines";
+import { arm, Point, setReference, thumbnail } from "./picker";
 import { atPoint, compare, inside, label, layout, path, pseudo, selector, vars, warmRemoteSheets, winners } from "./rules";
+import { exportHtml, hashDiff, hasRules, owners, react, record, restyleCost, watch } from "./tools";
 
-function Output({ lines }: { lines: string[]; }) {
-    return (
-        <pre style={{
-            margin: 0,
-            padding: "12px 14px",
-            overflowX: "auto",
-            background: "var(--background-tertiary)",
-            borderRadius: 6,
-            fontFamily: "var(--font-code)",
-            fontSize: 13,
-            lineHeight: 1.55,
-            color: "var(--text-default)"
-        }}>
-            {lines.join("\n")}
-        </pre>
-    );
-}
+const ICONS = {
+    copy: "M8 3h9a2 2 0 0 1 2 2v11h-2V5H8V3Zm-3 4h9a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Zm0 2v10h9V9H5Z",
+    pin: "M15 4V9l3 3v2h-5v7l-1 1-1-1v-7H6v-2l3-3V4H8V2h8v2z",
+    compare: "M3 5h8v14H3V5Zm2 2v10h4V7H5Zm8-2h8v14h-8V5Zm2 2v10h4V7h-4Z",
+    pick: "M11 2h2v3.1A7 7 0 0 1 18.9 11H22v2h-3.1A7 7 0 0 1 13 18.9V22h-2v-3.1A7 7 0 0 1 5.1 13H2v-2h3.1A7 7 0 0 1 11 5.1V2Zm1 5a5 5 0 1 0 0 10 5 5 0 0 0 0-10Zm0 3a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z",
+    save: "M5 3h11l5 5v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm2 2v4h8V5H7Zm5 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z",
+    notes: "M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm8 1.5V8h4.5L14 3.5ZM8 12v2h8v-2H8Zm0 4v2h5v-2H8Z",
+    watch: "M12 5c5 0 9 4.5 10 7-1 2.5-5 7-10 7S3 14.5 2 12c1-2.5 5-7 10-7Zm0 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0 2a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z",
+    record: "M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18Zm0 2a7 7 0 1 0 0 14 7 7 0 0 0 0-14Zm0 3a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z",
+    timer: "M9 2h6v2H9V2Zm3 3a8 8 0 1 1 0 16 8 8 0 0 1 0-16Zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12Zm-1 2h2v4.6l3 1.8-1 1.7-4-2.4V9Z",
+    html: "M8.6 7.4 4 12l4.6 4.6L7.2 18 1.2 12l6-6 1.4 1.4Zm6.8 0L20 12l-4.6 4.6 1.4 1.4 6-6-6-6-1.4 1.4Z",
+    close: "M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12 19 17.6 17.6 19 12 13.4 6.4 19 5 17.6 10.6 12 5 6.4 6.4 5Z",
+    check: "M9.5 16.2 5.3 12l-1.4 1.4 5.6 5.6 11-11-1.4-1.4z"
+} as const;
+
+const Icon = ({ name }: { name: keyof typeof ICONS; }) => (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d={ICONS[name]} /></svg>
+);
 
 function Section({ title, lines, start, n, copied, onCopy }: {
     title: string;
@@ -47,38 +53,14 @@ function Section({ title, lines, start, n, copied, onCopy }: {
     return (
         <ExpandableSection
             initialExpanded={start === true}
-            renderContent={() => <Output lines={lines} />}
+            renderContent={() => <Lines lines={lines} section={title} />}
         >
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexGrow: 1 }}>
-                <span
-                    onClick={take}
-                    title={`Copy, or press ${n}`}
-                    style={{
-                        minWidth: 20,
-                        padding: "1px 0",
-                        textAlign: "center",
-                        borderRadius: 5,
-                        cursor: "pointer",
-                        fontFamily: "var(--font-code)",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        background: copied ? "var(--brand-500)" : "var(--background-modifier-selected)",
-                        color: copied ? "var(--white)" : "var(--text-muted)"
-                    }}
-                >
-                    {n}
-                </span>
-                <HeadingSecondary style={{ margin: 0 }}>{title}</HeadingSecondary>
-                <Text variant="text-xs/normal" color="text-muted">{lines.length}</Text>
-                <Button
-                    size={Button.Sizes.MIN}
-                    look={Button.Looks.LINK}
-                    color={Button.Colors.PRIMARY}
-                    style={{ marginLeft: "auto", padding: "2px 10px" }}
-                    onClick={take}
-                >
-                    {copied ? "Copied" : "Copy"}
-                </Button>
+            <div className={cl("section-head")}>
+                <kbd className={cl("key", copied && "key-done")} onClick={take} title={n < 10 ? `Copy, or press ${n}` : "Copy"}>
+                    {copied ? <Icon name="check" /> : n < 10 ? n : "·"}
+                </kbd>
+                <HeadingSecondary className={cl("section-title")}>{title}</HeadingSecondary>
+                <span className={cl("count")}>{lines.length}</span>
             </div>
         </ExpandableSection>
     );
@@ -91,12 +73,13 @@ const TRY = "vc-inspector-try";
 function Try({ el }: { el: Element; }) {
     const first = selector(el).find(line => line.trim().startsWith("#app-mount"))?.trim() ?? "";
     const [sel, setSel] = useState(first);
-    const [prop, setProp] = useState("");
-    const [value, setValue] = useState("");
+    const [body, setBody] = useState("");
+    const [important, setImportant] = useState(false);
 
-    const rule = sel && prop && value ? `${sel} {
-    ${prop}: ${value};
-}` : "";
+    const declarations = body.split(/[;\n]/).map(one => one.trim()).filter(one => one.includes(":"));
+    const rule = sel && declarations.length
+        ? `${sel} {\n${declarations.map(one => `    ${one.replace(/\s*!important\s*$/, "")}${important ? " !important" : ""};`).join("\n")}\n}`
+        : "";
 
     useEffect(() => {
         const tag = document.getElementById(TRY) ?? document.head.appendChild(
@@ -107,16 +90,24 @@ function Try({ el }: { el: Element; }) {
     }, [rule]);
 
     return (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div className={cl("try")}>
             <TextInput value={sel} onChange={setSel} placeholder="#app-mount .thing" />
-            <div style={{ display: "flex", gap: 8 }}>
-                <TextInput value={prop} onChange={setProp} placeholder="background-color" style={{ flex: 1 }} />
-                <TextInput value={value} onChange={setValue} placeholder="red" style={{ flex: 1 }} />
+            <TextArea value={body} onChange={setBody} placeholder={"background-color: red\npadding: 4px"} rows={3} />
+            <div className={cl("try-row")}>
+                <label className={cl("try-toggle")}>
+                    <input type="checkbox" checked={important} onChange={e => setImportant(e.currentTarget.checked)} />
+                    !important
+                </label>
+                <button
+                    type="button"
+                    className={cl("text-button")}
+                    disabled={!rule}
+                    onClick={() => navigator.clipboard.writeText(rule).then(() => Toasts.show({ message: "Copied as QuickCSS", id: Toasts.genId(), type: Toasts.Type.SUCCESS }))}
+                >
+                    Copy as QuickCSS
+                </button>
             </div>
-            {rule && <Output lines={rule.split("\n")} />}
-            <Text variant="text-xs/normal" color="text-muted">
-                Applied live while this is open. Closing the modal takes it back off.
-            </Text>
+            {rule && <Lines lines={rule.split("\n")} section="Try" />}
         </div>
     );
 }
@@ -124,14 +115,11 @@ function Try({ el }: { el: Element; }) {
 function Shot({ el }: { el: Element; }) {
     const box = useRef<HTMLDivElement>(null);
     useEffect(() => {
-        if (box.current) thumbnail(el, box.current, 860, 190);
+        if (box.current) thumbnail(el, box.current, 500, 170);
     }, [el]);
 
     return (
-        <div style={{
-            display: "flex", justifyContent: "center", padding: 12, marginBottom: 16,
-            background: "var(--background-tertiary)", borderRadius: 8
-        }}>
+        <div className={cl("shot")}>
             <div ref={box} />
         </div>
     );
@@ -187,7 +175,7 @@ const typing = (el: EventTarget | null) => {
 
 /** the wrapper is what a click reaches; the dot painted on top of it is usually what you
  *  wanted. this lists both, and the parent, so getting to either is one click. */
-function Nearby({ el, at, close }: { el: Element; at?: Point; close: () => void; }) {
+function Nearby({ el, at }: { el: Element; at?: Point; }) {
     const here = useMemo(() => at ? atPoint(el, at.x, at.y).filter(one => one !== el) : [], [el, at]);
     const up = el.parentElement;
     // a click lands on whatever is on top, which is often a wrapper. without a way down
@@ -196,57 +184,62 @@ function Nearby({ el, at, close }: { el: Element; at?: Point; close: () => void;
 
     if (!here.length && !up && !down.length) return null;
 
-    const jump = (node: Element) => () => { close(); show(node, undefined, at); };
+    const jump = (node: Element) => () => show(node, undefined, at);
 
     return (
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
-            <Text variant="text-xs/normal" color="text-muted">also here</Text>
-            {up && (
-                <Button size={Button.Sizes.MIN} look={Button.Looks.LINK} color={Button.Colors.PRIMARY} onClick={jump(up)}>
-                    ↑ {label(up)}
-                </Button>
-            )}
-            {down.map((node, i) => (
-                <Button
-                    key={`down-${i}`}
-                    size={Button.Sizes.MIN}
-                    look={Button.Looks.LINK}
-                    color={Button.Colors.PRIMARY}
-                    onClick={jump(node)}
-                >
-                    ↓ {label(node)}
-                </Button>
-            ))}
-            {here.map((node, i) => (
-                <Button
-                    key={i}
-                    size={Button.Sizes.MIN}
-                    look={Button.Looks.LINK}
-                    color={Button.Colors.PRIMARY}
-                    onClick={jump(node)}
-                >
-                    {label(node)}
-                </Button>
-            ))}
+        <div className={cl("nearby")}>
+            <span className={cl("nearby-label")}>also here</span>
+            {up && <button type="button" className={cl("chip")} onClick={jump(up)}>↑ {label(up)}</button>}
+            {down.map((node, i) => <button key={`down-${i}`} type="button" className={cl("chip")} onClick={jump(node)}>↓ {label(node)}</button>)}
+            {here.map((node, i) => <button key={i} type="button" className={cl("chip")} onClick={jump(node)}>{label(node)}</button>)}
         </div>
     );
 }
 
-/** every section carries the same Copy button, so the one you meant and the one next to
- *  it are a few pixels apart and the wrong block reaches the clipboard. the number is
- *  both the label and the key that copies it. */
-function Report({ el, other, close }: { el: Element; other?: Element; close: () => void; }) {
+function Tool({ icon, label, keyName, onClick, active }: { icon: keyof typeof ICONS; label: string; keyName: string; onClick: () => void; active?: boolean; }) {
+    return (
+        <button type="button" aria-label={label} data-tip={label} aria-pressed={active} className={cl("tool")} onClick={onClick}>
+            <Icon name={icon} />
+            <kbd className={cl("key", "key-small")}>{keyName}</kbd>
+        </button>
+    );
+}
+
+export interface Pick {
+    ref: WeakRef<Element>;
+    label: string;
+    at: number;
+}
+
+export const history: Pick[] = [];
+const historyWatchers = new Set<() => void>();
+export const onHistory = (fn: () => void) => {
+    historyWatchers.add(fn);
+    return () => void historyWatchers.delete(fn);
+};
+
+let pinned: WeakRef<Element> | null = null;
+
+function Report({ el, other }: { el: Element; other?: Element; }) {
     // themes arrive through an @import from a cdn, and a cross-origin sheet throws on
     // cssRules. fetching them first is the difference between naming the rule that wins
     // and reporting that nine stylesheets could not be read.
     const [warmed, setWarmed] = useState(false);
+    const [since, setSince] = useState<string[] | null>(null);
+    const [extra, setExtra] = useState<{ title: string; lines: string[]; }[]>([]);
+    const [watched, setWatched] = useState<string[] | null>(null);
+    const [isPinned, setPinned] = useState(pinned?.deref() === el);
+
     useEffect(() => {
         let live = true;
         warmRemoteSheets().then(() => live && setWarmed(true));
+        Promise.resolve().then(() => Native.previous(nameFor(el))).then(found => live && found && setSince(hashDiff(found, el)), () => { });
         return () => { live = false; };
     }, []);
 
-    const sections = useMemo(() => [
+    const against = other ?? (pinned?.deref() !== el ? pinned?.deref() : undefined);
+
+    const fixed = useMemo(() => [
         { title: "Element", lines: element(el), start: true },
         { title: "Selector", lines: selector(el), start: true },
         { title: "Path", lines: path(el), start: true },
@@ -255,10 +248,22 @@ function Report({ el, other, close }: { el: Element; other?: Element; close: () 
         { title: "Pseudo elements", lines: pseudo(el) },
         { title: "Variables", lines: vars(el) },
         { title: "Layout", lines: layout(el) },
-        ...(other ? [{ title: "Compared", lines: compare(el, other), start: true }] : [])
-    ], [el, other, warmed]);
+        { title: "Owners", lines: owners(el) },
+        { title: "React", lines: react(el) },
+        { title: ":has() rules", lines: hasRules(el) },
+        ...(against?.isConnected ? [{ title: "Compared", lines: compare(el, against), start: true }] : [])
+    ], [el, against, warmed]);
+
+    const sections = [
+        ...fixed,
+        ...(since ? [{ title: "Since last dump", lines: since }] : []),
+        ...(watched ? [{ title: "Watching", lines: watched.length ? watched : ["waiting for a change"], start: true }] : []),
+        ...extra.map(one => ({ ...one, start: true }))
+    ];
 
     const [copied, setCopied] = useState(-1);
+    const [status, setStatus] = useState("");
+    const [flash, setFlash] = useState("");
 
     const copy = (n: number) => {
         const one = sections[n];
@@ -274,19 +279,67 @@ function Report({ el, other, close }: { el: Element; other?: Element; close: () 
         navigator.clipboard.writeText(everything()).then(() => setCopied(-2), () => setCopied(-1));
     };
 
-    const [saved, setSaved] = useState("");
-
     /** the clipboard only reaches a person who is here to paste it. a file on disk can be
      *  read by whatever is helping, which is the whole round trip this removes. */
     const saveAll = () => {
-        setSaved("saving...");
+        setStatus("saving...");
         Native.save(`${stamp()}-${nameFor(el)}.txt`, everything()).then(
-            file => setSaved(file),
-            error => setSaved(`could not write the file: ${error?.message ?? String(error)}`)
+            file => { setStatus(`written to ${file}`); setFlash(file.split(/[\\/]/).pop() ?? file); },
+            error => setStatus(`could not write the file: ${error?.message ?? String(error)}`)
         );
     };
 
-    const wrote = saved.includes("\\") || saved.includes("/");
+    const saveHtml = () => {
+        Native.save(`${stamp()}-${nameFor(el)}.html`, exportHtml(el)).then(
+            file => setStatus(`html written to ${file}`),
+            error => setStatus(`could not write the html: ${error?.message ?? String(error)}`)
+        );
+    };
+
+    const addNotes = () => {
+        const file = Settings.plugins.Inspector.notesFile as string;
+        if (!file) return setStatus("set a notes file in Inspector's settings first");
+        const lines = ["Element", "Selector", "Path"].flatMap(title => sections.find(one => one.title === title)?.lines ?? []);
+        const text = `\n### ${label(el)} (Inspector, ${new Date().toISOString().slice(0, 10)})\n\n\`\`\`\n${lines.join("\n")}\n\`\`\`\n`;
+        Promise.resolve().then(() => Native.appendNotes(file, text)).then(
+            () => setStatus(`added to ${file}`),
+            error => setStatus(`could not add to the notes: ${error?.message ?? String(error)}`)
+        );
+    };
+
+    const togglePin = () => {
+        const now = pinned?.deref() === el;
+        pinned = now ? null : new WeakRef(el);
+        setReference(el);
+        setPinned(!now);
+        setStatus(now ? "unpinned" : "pinned. the next pick compares with this one, and alt while picking measures from it");
+    };
+
+    const stopWatch = useRef<(() => void) | null>(null);
+    const toggleWatch = () => {
+        if (stopWatch.current) {
+            stopWatch.current();
+            stopWatch.current = null;
+            setWatched(null);
+            return;
+        }
+        setWatched([]);
+        stopWatch.current = watch(el, line => setWatched(lines => [...(lines ?? []), line].slice(-200)));
+    };
+    useEffect(() => () => stopWatch.current?.(), []);
+
+    const addSection = (title: string, lines: string[]) =>
+        setExtra(now => [...now.filter(one => one.title !== title), { title, lines }]);
+
+    const recordNow = () => {
+        setStatus("recording for one second...");
+        record(el).then(lines => { addSection("Recorded", lines); setStatus(""); });
+    };
+
+    const timeIt = () => addSection("Restyle cost", restyleCost(el));
+
+    const compareNext = () => { close(); arm(b => show(el, b)); };
+    const pickAnother = () => { close(); arm((a, at) => show(a, undefined, at)); };
 
     useEffect(() => {
         if (copied < 0) return;
@@ -295,14 +348,29 @@ function Report({ el, other, close }: { el: Element; other?: Element; close: () 
     }, [copied]);
 
     useEffect(() => {
+        if (!flash) return;
+        const clear = setTimeout(() => setFlash(""), 2000);
+        return () => clearTimeout(clear);
+    }, [flash]);
+
+    const keys: Record<string, () => void> = {
+        KeyS: saveAll, KeyP: togglePin, KeyC: compareNext, KeyA: pickAnother, KeyN: addNotes,
+        KeyW: toggleWatch, KeyR: recordNow, KeyT: timeIt, KeyE: saveHtml, Digit0: copyAll
+    };
+
+    useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
             if (e.ctrlKey || e.altKey || e.metaKey || typing(e.target)) return;
-            if (!/^Digit[0-9]$/.test(e.code) && e.code !== "KeyS") return;
+            if (e.key === "Escape") {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                return close();
+            }
+            const run = keys[e.code] ?? (/^Digit[1-9]$/.test(e.code) ? () => copy(Number(e.code.slice(5)) - 1) : null);
+            if (!run) return;
             e.preventDefault();
             e.stopImmediatePropagation();
-            if (e.code === "KeyS") saveAll();
-            else if (e.code === "Digit0") copyAll();
-            else copy(Number(e.code.slice(5)) - 1);
+            run();
         };
 
         window.addEventListener("keydown", onKey, true);
@@ -311,45 +379,32 @@ function Report({ el, other, close }: { el: Element; other?: Element; close: () 
 
     return (
         <>
-            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                <Button size={Button.Sizes.SMALL} color={Button.Colors.PRIMARY} onClick={copyAll}>
-                    {copied === -2 ? "Copied everything" : "Copy all  (0)"}
-                </Button>
-                <Button
-                    size={Button.Sizes.SMALL}
-                    color={Button.Colors.PRIMARY}
-                    onClick={() => { close(); arm(b => show(el, b)); }}
-                >
-                    {other ? "Compare with something else" : "Compare with…"}
-                </Button>
-                <Button
-                    size={Button.Sizes.SMALL}
-                    color={Button.Colors.PRIMARY}
-                    onClick={() => { close(); arm((a, at) => show(a, undefined, at)); }}
-                >
-                    Pick another
-                </Button>
-                <Button
-                    size={Button.Sizes.SMALL}
-                    color={wrote ? Button.Colors.GREEN : Button.Colors.BRAND}
-                    onClick={saveAll}
-                >
-                    {wrote ? "Saved ✓" : "Save to file  (s)"}
-                </Button>
+            <div className={cl("tools")}>
+                <Tool icon={copied === -2 ? "check" : "copy"} label="Copy everything" keyName="0" onClick={copyAll} />
+                <Tool icon={flash ? "check" : "save"} label="Save to a file" keyName="s" onClick={saveAll} />
+                <Tool icon="notes" label="Add to your notes file" keyName="n" onClick={addNotes} />
+                <span className={cl("tools-gap")} />
+                <Tool icon="pin" label={isPinned ? "Unpin" : "Pin, to compare and measure from"} keyName="p" onClick={togglePin} active={isPinned} />
+                <Tool icon="compare" label="Compare with another element" keyName="c" onClick={compareNext} />
+                <Tool icon="pick" label="Pick another" keyName="a" onClick={pickAnother} />
+                <span className={cl("tools-gap")} />
+                <Tool icon="watch" label={watched ? "Stop watching" : "Watch for changes"} keyName="w" onClick={toggleWatch} active={!!watched} />
+                <Tool icon="record" label="Record one second" keyName="r" onClick={recordNow} />
+                <Tool icon="timer" label="Time a restyle" keyName="t" onClick={timeIt} />
+                <Tool icon="html" label="Export as HTML" keyName="e" onClick={saveHtml} />
             </div>
 
-            <Text variant="text-xs/normal" color="text-muted" style={{ marginBottom: 12, wordBreak: "break-all" }}>
-                {saved
-                    ? (wrote ? `written to ${saved}` : saved)
-                    : "press a number to copy that section, 0 for all of them, s to write the lot to a file"}
-            </Text>
+            {(flash || status) && <div className={cl("status")}>{flash ? `saved ${flash}` : status}</div>}
 
             {sections.slice(0, 2).map((one, i) => (
                 <Section key={one.title} {...one} n={i + 1} copied={copied === i} onCopy={() => copy(i)} />
             ))}
 
             <ExpandableSection initialExpanded={false} renderContent={() => <Try el={el} />}>
-                <HeadingSecondary style={{ margin: 0 }}>Try a value</HeadingSecondary>
+                <div className={cl("section-head")}>
+                    <kbd className={cl("key")}>·</kbd>
+                    <HeadingSecondary className={cl("section-title")}>Try a value</HeadingSecondary>
+                </div>
             </ExpandableSection>
 
             {sections.slice(2).map((one, i) => (
@@ -359,19 +414,63 @@ function Report({ el, other, close }: { el: Element; other?: Element; close: () 
     );
 }
 
-export function show(el: Element, other?: Element, at?: Point) {
+function Sheet({ el, other, at }: { el: Element; other?: Element; at?: Point; }) {
     const named = read(el).find(one => one.name)?.name;
+    return (
+        <aside className={cl("sheet")} aria-label="Inspector">
+            <header className={cl("sheet-head")}>
+                <div className={cl("sheet-title")}>
+                    <Text variant="heading-md/semibold">Inspector</Text>
+                    <span className={cl("sheet-subtitle")}>{named ? `${el.tagName.toLowerCase()} · ${named}` : el.tagName.toLowerCase()}</span>
+                </div>
+                <button type="button" className={cl("tool")} aria-label="Close" data-tip="Close" onClick={close}>
+                    <Icon name="close" />
+                    <kbd className={cl("key", "key-small")}>esc</kbd>
+                </button>
+            </header>
+            <div className={cl("sheet-body")}>
+                <Shot el={el} />
+                <Nearby el={el} at={at} />
+                <Report el={el} other={other} />
+            </div>
+        </aside>
+    );
+}
 
-    openModal(props => (
-        <Modal
-            {...props}
-            size="lg"
-            title="Inspector"
-            subtitle={named ? `${el.tagName.toLowerCase()}, ${named}` : el.tagName.toLowerCase()}
-        >
-            <Shot el={el} />
-            <Nearby el={el} at={at} close={props.onClose} />
-            <Report el={el} other={other} close={props.onClose} />
-        </Modal>
-    ));
+let host: HTMLElement | null = null;
+let root: Root | null = null;
+let opened = 0;
+
+function render(node: React.ReactNode) {
+    if (!host?.isConnected) {
+        host = document.createElement("div");
+        host.className = cl("host");
+        document.body.appendChild(host);
+        root = createRoot(host);
+    }
+    root!.render(node);
+}
+
+export function close() {
+    root?.render(null);
+}
+
+export function destroy() {
+    root?.unmount();
+    host?.remove();
+    root = null;
+    host = null;
+}
+
+export function show(el: Element, other?: Element, at?: Point) {
+    history.unshift({ ref: new WeakRef(el), label: label(el), at: Date.now() });
+    history.splice(20);
+    for (const tell of historyWatchers) tell();
+    setReference(pinned?.deref() ?? el);
+
+    render(
+        <ErrorBoundary noop>
+            <Sheet key={++opened} el={el} other={other} at={at} />
+        </ErrorBoundary>
+    );
 }

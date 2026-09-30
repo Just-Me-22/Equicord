@@ -6,8 +6,8 @@
 
 import { DATA_DIR } from "@main/utils/constants";
 import { IpcMainInvokeEvent } from "electron";
-import { mkdirSync, readdirSync, rmSync, writeFileSync } from "fs";
-import { join } from "path";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { extname, join } from "path";
 
 /** next to settings and themes rather than in Documents: it is scratch output, and it
  *  belongs with the rest of the client's state where it can be cleared in one go. */
@@ -42,4 +42,18 @@ export function save(_: IpcMainInvokeEvent, name: string, text: string): string 
 
 export function folder(_: IpcMainInvokeEvent): string {
     return REPORTS;
+}
+
+export function previous(_: IpcMainInvokeEvent, name: string): { file: string; text: string; } | null {
+    if (!existsSync(REPORTS)) return null;
+    const suffix = `-${safe(name)}.txt`;
+    const file = readdirSync(REPORTS).filter(one => one.endsWith(suffix)).sort().pop();
+    return file ? { file, text: readFileSync(join(REPORTS, file), "utf8") } : null;
+}
+
+export function appendNotes(_: IpcMainInvokeEvent, path: string, text: string): string {
+    if (extname(path).toLowerCase() !== ".md") throw new Error("the notes file has to be a .md file");
+    if (!existsSync(path)) throw new Error(`there is no file at ${path}`);
+    appendFileSync(path, text, "utf8");
+    return path;
 }

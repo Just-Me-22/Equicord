@@ -63,6 +63,32 @@ function specificity(sel: string): number {
     return ids * 10000 + cls * 100 + els;
 }
 
+const sourceText = new WeakMap<CSSStyleSheet, string>();
+
+function textFor(sheet: CSSStyleSheet): string | null {
+    const known = sourceText.get(sheet);
+    if (known !== undefined) return known;
+    if (sheet.href && DISCORD_SHEET.test(sheet.href)) return null;
+    const node = sheet.ownerNode as HTMLElement | null;
+    return node?.tagName === "STYLE" ? node.textContent : null;
+}
+
+const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+function lineOf(sheet: CSSStyleSheet, sel: string): number | null {
+    const text = textFor(sheet);
+    if (!text || !sel) return null;
+    let at = text.indexOf(sel);
+    if (at < 0) {
+        const loose = escape(sel)
+            .replace(/"/g, "[\"']")
+            .replace(/\s*(>|\\\+|~|,)\s*/g, "\\s*$1\\s*")
+            .replace(/ +/g, "\\s+");
+        try { at = text.search(new RegExp(loose)); } catch { at = -1; }
+    }
+    return at < 0 ? null : text.slice(0, at).split("\n").length;
+}
+
 /** the stylesheet a rule came from, named the way a person would recognise it */
 function sourceOf(sheet: CSSStyleSheet | null): string {
     if (!sheet) return "(inline)";
@@ -150,6 +176,7 @@ async function warmOne(url: string, depth: number): Promise<void> {
 
     const sheet = new CSSStyleSheet();
     sheet.replaceSync(text);
+    sourceText.set(sheet, text);
     remote.set(url, sheet);
     remoteName.set(sheet, url.split("/").pop()?.split("?")[0] || url);
 
@@ -181,6 +208,9 @@ export function remoteNote(): string[] {
     return out.length ? ["", "imported stylesheets", ...out] : [];
 }
 
+export const fetchedSheets = () =>
+    Array.from(remote, ([url, sheet]) => ({ sheet, name: `${remoteName.get(sheet) ?? url}  (fetched)` }));
+
 interface Hit {
     value: string;
     important: boolean;
@@ -207,7 +237,9 @@ function withoutNot(sel: string): string {
     return out.trim();
 }
 
-function collect(el: Element, out: Map<string, Hit[]>, pseudo = "", misses?: Set<string>): { blocked: number; } {
+const STATES = /:(hover|focus-within|focus-visible|focus|active)\b/g;
+
+function collect(el: Element, out: Map<string, Hit[]>, pseudo = "", misses?: Set<string>, states?: Set<string>): { blocked: number; } {
     let order = 0;
     let blocked = 0;
     const walked = new Set<string>();
@@ -229,7 +261,7 @@ function collect(el: Element, out: Map<string, Hit[]>, pseudo = "", misses?: Set
                     // a pseudo selector cannot be tested with matches, so the tail is
                     // stripped and the element itself is tested against what is left
                     const tail = sel.endsWith(pseudo) && pseudo ? sel.slice(0, -pseudo.length) : sel;
-                    if (pseudo ? tail === sel : /::(before|after)/.test(sel)) continue;
+                    if (pseudo ? tail === sel : /::(before|after)\b/.test(sel)) continue;
                     try {
                         if (!el.matches(tail)) {
                             // a rule excluded only by :not() is invisible in the report, yet
@@ -238,6 +270,10 @@ function collect(el: Element, out: Map<string, Hit[]>, pseudo = "", misses?: Set
                             if (misses && tail.includes(":not(")) {
                                 const bare = withoutNot(tail);
                                 if (bare && el.matches(bare)) misses.add(`${sel.slice(0, 70)}   from  ${sourceOf(sheet)}`);
+                            }
+                            const calm = states && tail.replace(STATES, "");
+                            if (calm && calm !== tail && el.matches(calm)) {
+                                states!.add([sel.slice(0, 70), `    ${styleRule.style.cssText.slice(0, 140)}`, `    from  ${sourceOf(sheet)}`].join("\n"));
                             }
                             continue;
                         }
@@ -248,6 +284,8 @@ function collect(el: Element, out: Map<string, Hit[]>, pseudo = "", misses?: Set
                 }
                 if (best >= 0) {
                     order++;
+                    const line = lineOf(sheet, matched);
+                    const src = sourceOf(sheet) + (line ? `  line ${line}` : "");
                     for (const prop of TRACKED) {
                         const value = styleRule.style.getPropertyValue(prop);
                         if (!value) continue;
@@ -258,7 +296,7 @@ function collect(el: Element, out: Map<string, Hit[]>, pseudo = "", misses?: Set
                             spec: best,
                             order,
                             sel: matched,
-                            src: sourceOf(sheet)
+                            src
                         });
                         out.set(prop, list);
                     }
@@ -333,12 +371,17 @@ function collect(el: Element, out: Map<string, Hit[]>, pseudo = "", misses?: Set
 export function winners(el: Element): string[] {
     const map = new Map<string, Hit[]>();
     const misses = new Set<string>();
-    const { blocked } = collect(el, map, "", misses);
+    const states = new Set<string>();
+    const { blocked } = collect(el, map, "", misses, states);
     const near = misses.size
         ? ["", `${misses.size} rule${misses.size > 1 ? "s" : ""} would land here but for a :not()`,
             ...Array.from(misses).slice(0, 12).map(one => `  ${one}`)]
         : [];
-    const note = [...near, ...remoteNote(),
+    const hover = states.size
+        ? ["", `${states.size} rule${states.size > 1 ? "s" : ""} only land here on hover or focus`,
+            ...Array.from(states).slice(0, 12).map(one => `  ${one}`)]
+        : [];
+    const note = [...near, ...hover, ...remoteNote(),
         ...(blocked ? ["", `${blocked} stylesheet${blocked > 1 ? "s" : ""} could not be read`] : [])];
     if (!map.size) return ["no matching rules found", ...note];
 
@@ -592,6 +635,7 @@ export function selector(el: Element): string[] {
         out.push(sharing > 1
             ? `  loose     #app-mount [class*="${one.stem}"]   careful: ${sharing} modules use this name`
             : `  loose     #app-mount [class*="${one.stem}"]   survives a rebuild`);
+        out.push(`  on screen exact ${document.getElementsByClassName(one.token).length}, loose ${document.querySelectorAll(`[class*="${one.stem}"]`).length}`);
         out.push("");
     }
 
@@ -618,6 +662,9 @@ const stacks = (cs: CSSStyleDeclaration) =>
 
 const scrolls = (cs: CSSStyleDeclaration) =>
     /auto|scroll|overlay/.test(cs.overflowY) || /auto|scroll|overlay/.test(cs.overflowX);
+
+const virtualised = (node: Element) =>
+    Array.from(node.querySelectorAll(":scope > * > [style*=\"height\"]:empty, :scope > [style*=\"height\"]:empty")).length > 0;
 
 const clips = (cs: CSSStyleDeclaration) =>
     /hidden|clip/.test(cs.overflowX) || /hidden|clip/.test(cs.overflowY);
@@ -663,7 +710,10 @@ export function path(el: Element): string[] {
     if (self.position === "absolute" || self.position === "fixed") {
         head.push(`measured against  ${holder ? label(holder) : "the viewport"}`);
     }
-    head.push(`scroll parent     ${scroller ? label(scroller) : "none, nothing above this scrolls"}`, "");
+    head.push(`scroll parent     ${scroller ? label(scroller) : "none, nothing above this scrolls"}`);
+    const list = scroller && virtualised(scroller);
+    if (list) head.push("                  a virtual list: rows mount and unmount, and dom order is not screen order");
+    head.push("");
 
     const tree = chain.map((node, depth) => {
         const box = node.getBoundingClientRect();
@@ -671,7 +721,7 @@ export function path(el: Element): string[] {
         const tags: string[] = [];
 
         if (node === holder) tags.push("CONTAINING BLOCK");
-        if (depth && scrolls(cs)) tags.push("scrolls");
+        if (depth && scrolls(cs)) tags.push(node === scroller && list ? "scrolls, virtual list" : "scrolls");
         if (depth && clips(cs)) tags.push("clips");
         if (depth && stacks(cs)) tags.push("stacking context");
 

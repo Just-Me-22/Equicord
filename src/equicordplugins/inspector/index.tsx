@@ -13,8 +13,9 @@ import definePlugin, { OptionType } from "@utils/types";
 import { Button, Forms, TextInput, Toasts, useEffect, useMemo, useRef, useState } from "@webpack/common";
 
 import { build, current, read, search } from "./classMap";
-import { show } from "./panel";
+import { destroy, history, onHistory, show } from "./panel";
 import { arm, clear, disarm, outline, thumbnail } from "./picker";
+import managedStyle from "./style.css?managed";
 
 const mono = { fontFamily: "var(--font-code)", fontSize: 12 } as const;
 
@@ -50,7 +51,11 @@ function Picked() {
 
     useEffect(() => {
         watching.add(update);
-        return () => void watching.delete(update);
+        const off = onHistory(update);
+        return () => {
+            watching.delete(update);
+            off();
+        };
     }, [update]);
 
     useEffect(() => {
@@ -74,7 +79,34 @@ function Picked() {
                     .{one.token}{one.name ? `   is ${one.name}` : "   not in the map"}
                 </Forms.FormText>
             ))}
+            <History />
         </>
+    );
+}
+
+function History() {
+    if (history.length < 2) return null;
+    return (
+        <div className="vc-inspector-history">
+            <Forms.FormText>Recent picks</Forms.FormText>
+            {history.map((one, i) => {
+                const el = one.ref.deref();
+                const live = !!el?.isConnected;
+                return (
+                    <button
+                        key={`${one.at}-${i}`}
+                        type="button"
+                        className="vc-inspector-history-row"
+                        disabled={!live}
+                        title={live ? "Open this pick again" : "No longer on screen"}
+                        onClick={() => el && show(el)}
+                    >
+                        <span>{one.label}</span>
+                        <span>{new Date(one.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>
+                    </button>
+                );
+            })}
+        </div>
     );
 }
 
@@ -138,6 +170,11 @@ const settings = definePluginSettings({
         description: "Find the current class for a name.",
         component: () => <ErrorBoundary noop><Lookup /></ErrorBoundary>
     },
+    notesFile: {
+        type: OptionType.STRING,
+        description: "A .md file that Add to notes appends to, such as your selectors notes.",
+        default: ""
+    },
     fullCascade: {
         type: OptionType.BOOLEAN,
         description: "List every rule that lost, instead of the first four.",
@@ -151,6 +188,7 @@ export default definePlugin({
     authors: [{ name: "heart_menace", id: 281162701303185408n }],
     dependencies: ["HeaderBarAPI"],
     settings,
+    managedStyle,
 
     start() {
         document.addEventListener("keydown", onKey, true);
@@ -161,5 +199,6 @@ export default definePlugin({
         document.removeEventListener("keydown", onKey, true);
         removeChannelToolbarButton("vc-inspector");
         disarm();
+        destroy();
     }
 });
