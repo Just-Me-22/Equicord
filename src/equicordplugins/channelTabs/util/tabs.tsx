@@ -13,7 +13,7 @@ import { JSX } from "react";
 import { logger, settings } from "./constants";
 import { autoGroupAll, autoGroupTab, normalizeContiguity, pruneGroups, removeFromGroup, resetGroups, tabGroups, ungroupAutoGroups } from "./groups";
 import { cacheCurrentTabState, clearTabState, restoreTabState, tabStateCache } from "./scroll";
-import { BasicChannelTabsProps, ChannelTabsProps, PersistedTabs } from "./types";
+import { BasicChannelTabsProps, ChannelTabsProps, PersistedTabs, TabsSnapshot } from "./types";
 
 const cl = classNameFactory("vc-channeltabs-");
 
@@ -94,7 +94,12 @@ const genId = () => highestIdIndex++;
 
 const openTabs: ChannelTabsProps[] = [];
 const closedTabs: ChannelTabsProps[] = [];
+const closingTabs = new Set<number>();
+export const enteredTabs = new Set<number>();
 let currentlyOpenTab: number;
+let closedAt = 0;
+const UNDO_MS = 5000;
+const CLOSE_ANIMATION_MS = 150;
 export const openTabHistory: number[] = [];
 let hydratedUserId: string | undefined;
 let isHydrating = false;
@@ -176,7 +181,13 @@ export function createTab(props: BasicChannelTabsProps | ChannelTabsProps, switc
     }
 
     const id = genId();
-    const tab = { ...props, id, messageId, compact: "compact" in props ? props.compact : settings.store.openNewTabsInCompactMode };
+    const tab = {
+        ...props,
+        id,
+        messageId,
+        compact: "compact" in props ? props.compact : settings.store.openNewTabsInCompactMode,
+        visitedAt: "visitedAt" in props && props.visitedAt ? props.visitedAt : Date.now()
+    };
     openTabs.push(tab);
     stabilisePins();
     if (!isHydrating) autoGroupTab(tab);
@@ -192,6 +203,7 @@ export function closeTab(id: number) {
 
     const closed = openTabs.splice(i, 1);
     closedTabs.push(...closed);
+    closedAt = Date.now();
     pruneGroups();
 
     // the memory leak preventer
@@ -228,6 +240,31 @@ export function closeTab(id: number) {
     if (i !== openTabs.length) bumpGhostTabCount();
     else clearGhostTabs();
     update();
+}
+
+export const isTabClosing = (id: number) => closingTabs.has(id);
+
+export function closeTabAnimated(id: number) {
+    if (openTabs.length <= 1 || closingTabs.has(id)) return;
+    if (!settings.store.animationEnterExit) return closeTab(id);
+
+    closingTabs.add(id);
+    update(false);
+    setTimeout(() => {
+        closingTabs.delete(id);
+        closeTab(id);
+    }, CLOSE_ANIMATION_MS);
+}
+
+export function lastClosedTab() {
+    const remaining = UNDO_MS - (Date.now() - closedAt);
+    const tab = closedTabs.at(-1);
+    return remaining > 0 && tab ? { tab, remaining } : undefined;
+}
+
+export function undoClose() {
+    closedAt = 0;
+    reopenClosedTabAt(0);
 }
 
 export function closeOtherTabs(id: number) {
@@ -341,6 +378,7 @@ export function handleChannelSwitch(ch: BasicChannelTabsProps) {
         openTabs[openTabs.indexOf(tab)] = {
             id: tab.id,
             compact: tab.compact,
+            visitedAt: Date.now(),
             ...(sameGuild && { groupId: tab.groupId, escapedGroup: tab.escapedGroup }),
             ...ch
         };
@@ -390,23 +428,31 @@ export function isTabSelected(id: number) {
     return id === currentlyOpenTab;
 }
 
-export function currentTabsSnapshot() {
+export function currentTabsSnapshot(): TabsSnapshot {
     return {
         openTabs: openTabs.map(tab => ({ ...tab })),
-        openTabIndex: Math.max(openTabs.findIndex(tab => tab.id === currentlyOpenTab), 0)
+        openTabIndex: Math.max(openTabs.findIndex(tab => tab.id === currentlyOpenTab), 0),
+        tabGroups: tabGroups.map(group => ({ ...group }))
     };
 }
 
-export function replaceTabsWith(saved: PersistedTabs[string] | undefined) {
+export function replaceTabsWith(saved: TabsSnapshot | undefined) {
     if (!saved?.openTabs?.length) return false;
 
     replaceArray(openTabs);
     replaceArray(closedTabs);
     replaceArray(openTabHistory);
     clearTabState();
+    enteredTabs.clear();
     highestIdIndex = 0;
+    resetGroups(saved.tabGroups);
 
-    saved.openTabs.forEach(tab => createTab(tab, false, tab.messageId, false));
+    const groupIds = new Set(tabGroups.map(group => group.id));
+    saved.openTabs.forEach(({ groupId, ...tab }) => createTab(
+        groupId && groupIds.has(groupId) ? { ...tab, groupId } : tab,
+        false, tab.messageId, false
+    ));
+    pruneGroups();
     moveToTab((openTabs[saved.openTabIndex] ?? openTabs[0]).id);
     update();
 
@@ -522,6 +568,7 @@ export async function openStartupTabs(props: BasicChannelTabsProps & { userId: s
     replaceArray(closedTabs);
     replaceArray(openTabHistory);
     clearTabState();
+    enteredTabs.clear();
     highestIdIndex = 0;
     resetGroups(savedTabs?.tabGroups);
 
@@ -634,7 +681,8 @@ export function setOpenTab(id: number) {
     if (i === -1) return logger.error("Couldn't find channel tab with ID " + id, openTabs);
 
     currentlyOpenTab = id;
-    openTabHistory.push(id);
+    openTabs[i].visitedAt = Date.now();
+    if (!cycling) openTabHistory.push(id);
 }
 
 export function setUpdaterFunction(fn: UpdateFunction): () => void {
@@ -691,6 +739,62 @@ export function navigateToBookmark(ch: BasicChannelTabsProps) {
         // sorry for all the comments im losing it here
         switchChannel(ch);
     }
+}
+
+export function renameTab(id: number, label: string) {
+    const tab = openTabs.find(v => v.id === id);
+    if (!tab) return logger.error("Couldn't find channel tab with ID " + id, openTabs);
+
+    if (label) tab.label = label;
+    else delete tab.label;
+    update();
+}
+
+export function applyIdleRules() {
+    const now = Date.now();
+    const compactAfter = settings.store.autoCompactAfterHours * 3_600_000;
+    const closeAfter = settings.store.autoCloseAfterDays * 86_400_000;
+    let changed = false;
+
+    for (const tab of [...openTabs]) {
+        if (tab.id === currentlyOpenTab || tab.pinned || !tab.visitedAt) continue;
+
+        const idle = now - tab.visitedAt;
+        if (closeAfter && idle > closeAfter) {
+            closeTab(tab.id);
+            continue;
+        }
+        if (compactAfter && idle > compactAfter && !tab.compact) {
+            tab.compact = true;
+            changed = true;
+        }
+    }
+
+    if (changed) update();
+}
+
+let cycling = false;
+let cycleOrder: number[] = [];
+let cycleIndex = 0;
+
+export function cycleRecentTab(by: 1 | -1) {
+    if (openTabs.length < 2) return;
+
+    if (!cycling) {
+        const recent = [...new Set([...openTabHistory].reverse())].filter(id => openTabs.some(tab => tab.id === id));
+        cycleOrder = [...recent, ...openTabs.map(tab => tab.id).filter(id => !recent.includes(id))];
+        cycleIndex = Math.max(cycleOrder.indexOf(currentlyOpenTab), 0);
+        cycling = true;
+    }
+
+    cycleIndex = (cycleIndex + by + cycleOrder.length) % cycleOrder.length;
+    moveToTab(cycleOrder[cycleIndex]);
+}
+
+export function endRecentCycle() {
+    if (!cycling) return;
+    cycling = false;
+    openTabHistory.push(currentlyOpenTab);
 }
 
 export function toggleCompactTab(id: number) {

@@ -10,6 +10,8 @@ export * from "./folderIcons";
 export * from "./groups";
 export * from "./icons";
 export * from "./tabs";
+export * from "./tabSets";
+export * from "./title";
 export * from "./types";
 export * from "./unread";
 export * from "./unreadState";

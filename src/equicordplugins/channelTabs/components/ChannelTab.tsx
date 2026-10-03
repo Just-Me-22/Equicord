@@ -5,15 +5,17 @@
  */
 
 import { BaseText } from "@components/BaseText";
-import { ChannelTabsProps, closeTab, ensureUnreadFallbackCountsLoaded, getNotificationDotState, getUnreadFallbackCounts, groupTabs, guildColor, isTabSelected, moveDraggedGroup, moveDraggedTabs, moveToTab, openedTabs, removeFromGroup, setTabDragging, settings, updateUnreadFallbackCounts } from "@equicordplugins/channelTabs/util";
+import { PencilIcon } from "@components/Icons";
+import { ChannelTabsProps, closeTabAnimated, ensureUnreadFallbackCountsLoaded, enteredTabs, getNotificationDotState, getUnreadFallbackCounts, groupTabs, guildColor, isTabClosing, isTabSelected, moveDraggedGroup, moveDraggedTabs, moveToTab, openedTabs, removeFromGroup, setTabDragging, settings, tabTitle, updateUnreadFallbackCounts } from "@equicordplugins/channelTabs/util";
 import { ActivityIcon, CircleQuestionIcon, DiscoveryIcon, EnvelopeIcon, FriendsIcon, ICYMIIcon, NitroIcon, QuestIcon, ShopIcon } from "@equicordplugins/channelTabs/util/icons";
 import { getActiveAutoCompletes } from "@equicordplugins/questify/utils/completion";
 import { classNameFactory } from "@utils/css";
 import { getGuildAcronym, getIntlMessage } from "@utils/discord";
-import { classes } from "@utils/misc";
+import { classes, pluralize } from "@utils/misc";
 import { Channel, Guild, User } from "@vencord/discord-types";
+import { DraftType } from "@vencord/discord-types/enums";
 import { findComponentByCodeLazy, findCssClassesLazy } from "@webpack";
-import { ActiveJoinedThreadsStore, Avatar, ChannelStore, ContextMenuApi, GuildStore, PresenceStore, ReadStateStore, TypingStore, useDrag, useDrop, useEffect, useRef, UserStore, useState, useStateFromStores } from "@webpack/common";
+import { ActiveJoinedThreadsStore, Avatar, ChannelStore, ContextMenuApi, DraftStore, GuildStore, MessageStore, PresenceStore, ReadStateStore, Tooltip, TypingStore, useDrag, useDrop, useEffect, useRef, UserGuildSettingsStore, UserStore, useState, useStateFromStores, VoiceStateStore } from "@webpack/common";
 import { JSX } from "react";
 
 import { TabContextMenu } from "./ContextMenus";
@@ -90,7 +92,9 @@ function getChannelUnreadState(channelId: string) {
     };
 }
 
-export const NotificationDot = ({ channelIds, onMention }: { channelIds: string[]; onMention?: (hasMention: boolean) => void; }) => {
+type BadgeState = "mention" | "unread" | null;
+
+export const NotificationDot = ({ channelIds, onBadge }: { channelIds: string[]; onBadge?: (badge: BadgeState) => void; }) => {
     const userId = UserStore.getCurrentUser()?.id;
     const { persistUnreadCountFallback } = settings.use(["persistUnreadCountFallback"]);
     const [, forceUpdate] = useState(0);
@@ -106,10 +110,11 @@ export const NotificationDot = ({ channelIds, onMention }: { channelIds: string[
         persistUnreadCountFallback
     );
 
-    const showsMention = shouldShow && hasMention;
+    const badge: BadgeState = !shouldShow ? null : hasMention ? "mention" : "unread";
     useEffect(() => {
-        onMention?.(showsMention);
-    }, [showsMention, onMention]);
+        onBadge?.(badge);
+    }, [badge, onBadge]);
+    useEffect(() => () => onBadge?.(null), [onBadge]);
 
     useEffect(() => {
         if (!userId || !persistUnreadCountFallback) return;
@@ -165,12 +170,84 @@ export const TabNumberBadge = ({ number, position, isSelected, isCompact, isHove
     );
 };
 
+const specialPageIcons: Record<string, React.ComponentType<any>> = {
+    "__quests__": QuestIcon,
+    "__message-requests__": EnvelopeIcon,
+    "__friends__": FriendsIcon,
+    "__shop__": ShopIcon,
+    "__library__": () => LibraryIcon(20, 20),
+    "__discovery__": DiscoveryIcon,
+    "__nitro__": NitroIcon,
+    "__icymi__": ICYMIIcon,
+    "__activity__": ActivityIcon
+};
+
+function DraftMark({ channelId, tabId }: { channelId: string; tabId: number; }) {
+    const hasDraft = useStateFromStores([DraftStore], () => !!DraftStore.getDraft(channelId, DraftType.ChannelMessage));
+    if (!hasDraft || isTabSelected(tabId)) return null;
+    return <PencilIcon className={cl("draft-mark")} width={14} height={14} aria-label="Unsent draft" />;
+}
+
+function VoiceAvatars({ channel }: { channel: Channel; }) {
+    const ids = useStateFromStores([VoiceStateStore], () => Object.keys(VoiceStateStore.getVoiceStatesForChannel(channel.id) ?? {}).join(","));
+    if (!ids) return null;
+
+    const everyone = ids.split(",");
+    return (
+        <div className={cl("voice-avatars")}>
+            {everyone.slice(0, 3).map(id => UserStore.getUser(id)).filter(Boolean).map(user =>
+                <img key={user.id} className={cl("voice-avatar")} src={user.getAvatarURL(channel.guild_id, 32)} alt="" />
+            )}
+            {everyone.length > 3 && <span className={cl("voice-more")}>+{everyone.length - 3}</span>}
+        </div>
+    );
+}
+
+function ChannelName({ channel, label }: { channel: Channel; label?: string; }) {
+    const parent = !label && channel.isThread() ? ChannelStore.getChannel(channel.parent_id)?.name : undefined;
+    return (
+        <BaseText className={cl("name-text")}>
+            {parent && <span className={cl("thread-parent")}>{parent} › </span>}
+            {label ?? channel.name}
+        </BaseText>
+    );
+}
+
+function plainText(content: string) {
+    return content
+        .replace(/<a?(:\w+:)\d+>/g, "$1")
+        .replace(/<@!?(\d+)>/g, (_, id) => `@${UserStore.getUser(id)?.username ?? "user"}`)
+        .replace(/<#(\d+)>/g, (_, id) => `#${ChannelStore.getChannel(id)?.name ?? "channel"}`);
+}
+
+function TabTooltip({ tab }: { tab: ChannelTabsProps; }) {
+    const guild = GuildStore.getGuild(tab.guildId);
+    const mentions = ReadStateStore.getMentionCount(tab.channelId);
+    const unread = ReadStateStore.getUnreadCount(tab.channelId);
+    const recent = ChannelStore.getChannel(tab.channelId) ? MessageStore.getMessages(tab.channelId)?._array?.slice(-3) ?? [] : [];
+
+    return (
+        <div className={cl("tooltip-body")}>
+            <div className={cl("tooltip-title")}>{[guild?.name, tabTitle(tab)].filter(Boolean).join(" / ")}</div>
+            {(mentions > 0 || unread > 0) && <div className={cl("tooltip-meta")}>
+                {mentions > 0 ? pluralize(mentions, "mention") : `${unread} unread`}
+            </div>}
+            {recent.map(message => (
+                <div key={message.id} className={cl("tooltip-line")}>
+                    <span className={cl("tooltip-author")}>{message.author.globalName ?? message.author.username}</span>
+                    {" "}{plainText(message.content) || "…"}
+                </div>
+            ))}
+        </div>
+    );
+}
+
 function ChannelTabContent(props: ChannelTabsProps & {
     guild?: Guild,
     channel?: Channel;
-    onMention?: (hasMention: boolean) => void;
+    onBadge?: (badge: BadgeState) => void;
 }) {
-    const { guild, guildId, channel, channelId, compact, onMention } = props;
+    const { guild, guildId, channel, channelId, onBadge, label } = props;
     const userId = UserStore.getCurrentUser()?.id;
     const recipients = channel?.recipients;
     const {
@@ -196,8 +273,10 @@ function ChannelTabContent(props: ChannelTabsProps & {
                 <>
                     <GuildIcon guild={guild} />
                     <ChannelTypeIcon channel={channel} guild={guild} />
-                    <BaseText className={cl("name-text")}>{channel.name}</BaseText>
-                    <NotificationDot channelIds={[channel.id]} onMention={onMention} />
+                    <ChannelName channel={channel} label={label} />
+                    {(channel.isGuildVoice() || channel.isGuildStageVoice()) && <VoiceAvatars channel={channel} />}
+                    <DraftMark channelId={channel.id} tabId={props.id} />
+                    <NotificationDot channelIds={[channel.id]} onBadge={onBadge} />
                     <TypingIndicator isTyping={isTyping} />
                 </>
             );
@@ -223,7 +302,7 @@ function ChannelTabContent(props: ChannelTabsProps & {
             return (
                 <>
                     <GuildIcon guild={guild} />
-                    <BaseText className={cl("name-text")}>{name}</BaseText>
+                    <BaseText className={cl("name-text")}>{label ?? name}</BaseText>
                 </>
             );
         }
@@ -244,9 +323,10 @@ function ChannelTabContent(props: ChannelTabsProps & {
                         isMobile={isMobile}
                     />
                     <BaseText className={cl("name-text")}>
-                        {username}
+                        {label ?? username}
                     </BaseText>
-                    <NotificationDot channelIds={[channel.id]} onMention={onMention} />
+                    <DraftMark channelId={channel.id} tabId={props.id} />
+                    <NotificationDot channelIds={[channel.id]} onBadge={onBadge} />
                     {!showStatusIndicators && <TypingIndicator isTyping={isTyping} />}
                 </>
             );
@@ -255,38 +335,23 @@ function ChannelTabContent(props: ChannelTabsProps & {
             return (
                 <>
                     <ChannelIcon channel={channel} />
-                    <BaseText className={cl("name-text")}>{channel?.name || getIntlMessage("GROUP_DM")}</BaseText>
-                    <NotificationDot channelIds={[channel.id]} onMention={onMention} />
+                    <BaseText className={cl("name-text")}>{label ?? (channel?.name || getIntlMessage("GROUP_DM"))}</BaseText>
+                    <DraftMark channelId={channel.id} tabId={props.id} />
+                    <NotificationDot channelIds={[channel.id]} onBadge={onBadge} />
                     <TypingIndicator isTyping={isTyping} />
                 </>
             );
         }
     }
 
-    // handle special synthetic pages
-    if (channelId && channelId.startsWith("__")) {
-        const specialPagesConfig: Record<string, { label: string, Icon: React.ComponentType<any>; }> = {
-            "__quests__": { label: "Quests", Icon: QuestIcon },
-            "__message-requests__": { label: "Message Requests", Icon: EnvelopeIcon },
-            "__friends__": { label: getIntlMessage("FRIENDS"), Icon: FriendsIcon },
-            "__shop__": { label: "Shop", Icon: ShopIcon },
-            "__library__": { label: "Library", Icon: () => LibraryIcon(20, 20) },
-            "__discovery__": { label: "Discovery", Icon: DiscoveryIcon },
-            "__nitro__": { label: "Nitro", Icon: NitroIcon },
-            "__icymi__": { label: "ICYMI", Icon: ICYMIIcon },
-            "__activity__": { label: "Activity", Icon: ActivityIcon },
-        };
-
-        const pageConfig = specialPagesConfig[channelId];
-        if (pageConfig) {
-            const { label, Icon } = pageConfig;
-            return (
-                <>
-                    <Icon />
-                    <BaseText className={cl("name-text")}>{label}</BaseText>
-                </>
-            );
-        }
+    const PageIcon = specialPageIcons[channelId];
+    if (PageIcon) {
+        return (
+            <>
+                <PageIcon />
+                <BaseText className={cl("name-text")}>{tabTitle(props)}</BaseText>
+            </>
+        );
     }
 
     if (guildId === "@me" || guildId === undefined) {
@@ -306,20 +371,28 @@ function ChannelTabContent(props: ChannelTabsProps & {
     );
 }
 
-export default function ChannelTab(props: ChannelTabsProps & { index: number; searchActive?: boolean; }) {
-    const { channelId, guildId, id, index, compact, searchActive } = props;
+export default function ChannelTab(props: ChannelTabsProps & { index: number; searchActive?: boolean; searchFocused?: boolean; }) {
+    const { channelId, guildId, id, index, compact, searchActive, searchFocused } = props;
     const guild = GuildStore.getGuild(guildId);
     const channel = ChannelStore.getChannel(channelId);
 
-    const [isEntering, setIsEntering] = useState(true);
-    const [isClosing, setIsClosing] = useState(false);
+    const [isEntering, setIsEntering] = useState(() => !enteredTabs.has(id));
     const [isDragging, setIsDragging] = useState(false);
     const [isDropTarget, setIsDropTarget] = useState(false);
     const [isGroupTarget, setIsGroupTarget] = useState(false);
     const [isHovered, setIsHovered] = useState(false);
-    const [hasMention, setHasMention] = useState(false);
+    const [badge, setBadge] = useState<BadgeState>(null);
+    const isMuted = useStateFromStores([UserGuildSettingsStore], () =>
+        !!channel && (guild
+            ? UserGuildSettingsStore.isChannelMuted(guildId, channelId) || UserGuildSettingsStore.isCategoryMuted(guildId, channelId)
+            : UserGuildSettingsStore.isChannelMuted(null, channelId)),
+    [channelId, guildId, !!channel, !!guild]);
 
-    const { showTabNumbers, tabNumberPosition } = settings.use(["showTabNumbers", "tabNumberPosition"]);
+    const { showTabNumbers, tabNumberPosition, tabBarPosition } = settings.use(["showTabNumbers", "tabNumberPosition", "tabBarPosition"]);
+
+    useEffect(() => {
+        enteredTabs.add(id);
+    }, [id]);
 
     useEffect(() => {
         if (isEntering) {
@@ -342,6 +415,10 @@ export default function ChannelTab(props: ChannelTabsProps & { index: number; se
     const groupTargetRef = useRef(false);
     const lastSwapTimeRef = useRef(0);
     const SWAP_THROTTLE_MS = 100;
+
+    useEffect(() => {
+        if (searchFocused) ref.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }, [searchFocused]);
 
     const handleResizeStart = (e: React.MouseEvent) => {
         e.preventDefault();
@@ -489,86 +566,103 @@ export default function ChannelTab(props: ChannelTabsProps & { index: number; se
     }), [id]);
     drag(drop(ref));
 
-    const hasActiveQuests = getActiveAutoCompletes().length > 0;
-    return <div
-        className={cl("tab", {
-            "tab-compact": compact,
-            "tab-selected": isTabSelected(id),
-            "tab-entering": isEntering,
-            "tab-closing": isClosing,
-            "tab-dragging": isDragging,
-            "tab-mention": hasMention,
-            "tab-drop-target": isDropTarget && !isGroupTarget,
-            "tab-group-target": isGroupTarget,
-            "tab-pinned": !!props.pinned,
-            "tab-nitro": channelId === "__nitro__",
-            "tab-quests-active": channelId === "__quests__" && hasActiveQuests,
-            wider: settings.store.widerTabsAndBookmarks
-        })}
-        key={index}
-        ref={ref}
-        title={[guild?.name, channel?.name].filter(Boolean).join(" / ") || undefined}
-        style={settings.store.colorTabsByServer
-            ? { "--vc-channeltabs-guild": guildColor(guildId) } as React.CSSProperties
-            : undefined}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-        onAuxClick={e => {
-            if (e.button === 1 /* middle click */)
-                closeTab(id);
-        }}
-        onContextMenu={e => ContextMenuApi.openContextMenu(e, () => <TabContextMenu tab={props} />)}
+    const isClosing = isTabClosing(id);
+    return <Tooltip
+        text={<TabTooltip tab={props} />}
+        position={tabBarPosition === "top" ? "bottom" : "top"}
+        tooltipClassName={cl("tooltip")}
+        delay={500}
+        shouldShow={!isDragging && !isClosing}
     >
-        <button
-            className={cl("button", "channel-info")}
-            onClick={() => moveToTab(id)}
-        >
-            <div
-                className={cl("tab-inner")}
-                data-compact={compact}
-            >
-                {/* left position badge */}
-                {showTabNumbers && tabNumberPosition === "left" && (
-                    <TabNumberBadge
-                        number={index + 1}
-                        position="left"
-                        isSelected={isTabSelected(id)}
-                        isCompact={compact}
-                        isHovered={isHovered}
-                    />
-                )}
-
-                <ChannelTabContent {...props} guild={guild} channel={channel} onMention={setHasMention} />
-
-                {/* right position badge */}
-                {showTabNumbers && tabNumberPosition === "right" && (
-                    <TabNumberBadge
-                        number={index + 1}
-                        position="right"
-                        isSelected={isTabSelected(id)}
-                        isCompact={compact}
-                        isHovered={isHovered}
-                    />
-                )}
-            </div>
-        </button>
-
-        {openedTabs.length > 1 && <button
-            className={cl("button", "close-button", { "close-button-compact": compact })}
-            aria-label="Close tab"
-            onClick={() => {
-                setIsClosing(true);
-                setTimeout(() => closeTab(id), 150);
+        {tooltipProps => <div
+            className={cl("tab", {
+                "tab-compact": compact,
+                "tab-closable": openedTabs.length > 1,
+                "tab-selected": isTabSelected(id),
+                "tab-entering": isEntering,
+                "tab-closing": isClosing,
+                "tab-dragging": isDragging,
+                "tab-mention": badge === "mention",
+                "tab-unread": badge !== null,
+                "tab-muted": isMuted,
+                "tab-drop-target": isDropTarget && !isGroupTarget,
+                "tab-group-target": isGroupTarget,
+                "tab-pinned": !!props.pinned,
+                "tab-nitro": channelId === "__nitro__",
+                "tab-quests-active": channelId === "__quests__" && getActiveAutoCompletes().length > 0,
+                "tab-search-focused": !!searchFocused,
+                wider: settings.store.widerTabsAndBookmarks
+            })}
+            key={index}
+            ref={ref}
+            style={settings.store.colorTabsByServer
+                ? { "--vc-channeltabs-guild": guildColor(guildId) } as React.CSSProperties
+                : undefined}
+            onMouseEnter={() => {
+                tooltipProps.onMouseEnter();
+                if (showTabNumbers) setIsHovered(true);
+            }}
+            onMouseLeave={() => {
+                tooltipProps.onMouseLeave();
+                if (showTabNumbers) setIsHovered(false);
+            }}
+            onClick={tooltipProps.onClick}
+            onAuxClick={e => {
+                if (e.button === 1) closeTabAnimated(id);
+            }}
+            onContextMenu={e => {
+                tooltipProps.onContextMenu();
+                ContextMenuApi.openContextMenu(e, () => <TabContextMenu tab={props} />);
             }}
         >
-            <XIcon size={16} fill="var(--interactive-icon-default)" />
-        </button>}
+            <button
+                className={cl("button", "channel-info")}
+                onClick={() => moveToTab(id)}
+            >
+                <div
+                    className={cl("tab-inner")}
+                    data-compact={compact}
+                >
+                    {/* left position badge */}
+                    {showTabNumbers && tabNumberPosition === "left" && (
+                        <TabNumberBadge
+                            number={index + 1}
+                            position="left"
+                            isSelected={isTabSelected(id)}
+                            isCompact={compact}
+                            isHovered={isHovered}
+                        />
+                    )}
 
-        {!compact && settings.store.showResizeHandle && <div
-            className={cl("tab-resize-handle")}
-            onMouseDown={handleResizeStart}
-        />}
-    </div>;
+                    <ChannelTabContent {...props} guild={guild} channel={channel} onBadge={setBadge} />
+
+                    {/* right position badge */}
+                    {showTabNumbers && tabNumberPosition === "right" && (
+                        <TabNumberBadge
+                            number={index + 1}
+                            position="right"
+                            isSelected={isTabSelected(id)}
+                            isCompact={compact}
+                            isHovered={isHovered}
+                        />
+                    )}
+                </div>
+            </button>
+
+            {openedTabs.length > 1 && <button
+                className={cl("button", "close-button", { "close-button-compact": compact })}
+                aria-label="Close tab"
+                onClick={() => closeTabAnimated(id)}
+            >
+                <XIcon size={16} fill="var(--interactive-icon-default)" />
+            </button>}
+
+            {!compact && settings.store.showResizeHandle && <div
+                className={cl("tab-resize-handle")}
+                onMouseDown={handleResizeStart}
+            />}
+        </div>}
+    </Tooltip>;
 }
 
 export const PreviewTab = (props: ChannelTabsProps) => {

@@ -11,7 +11,7 @@ import { Paragraph } from "@components/Paragraph";
 import { ChannelTabsPreview } from "@equicordplugins/channelTabs/components/ChannelTabsContainer";
 import { KeybindSettings } from "@equicordplugins/channelTabs/components/KeybindSettings";
 import { currentTabsSnapshot, replaceTabsWith } from "@equicordplugins/channelTabs/util/tabs";
-import { PersistedTabs } from "@equicordplugins/channelTabs/util/types";
+import { PersistedTabs, TabsSnapshot } from "@equicordplugins/channelTabs/util/types";
 import { Logger } from "@utils/Logger";
 import { makeRange, OptionType } from "@utils/types";
 import { Button, SearchableSelect, showToast, Toasts, UserStore, useState } from "@webpack/common";
@@ -155,9 +155,10 @@ export const bookmarkFolderColors = {
 
 /** black and white are fine on a folder icon and unreadable as a border, so a server
  *  never gets one */
-const guildColors = Object.entries(bookmarkFolderColors)
-    .filter(([name]) => name !== "Black" && name !== "White")
-    .map(([, hex]) => hex);
+export const tintColors = Object.entries(bookmarkFolderColors)
+    .filter(([name]) => name !== "Black" && name !== "White");
+
+const guildColors = tintColors.map(([, hex]) => hex);
 
 /** picked from the id rather than stored, so a server keeps its colour across sessions
  *  and machines without anything to migrate */
@@ -331,13 +332,13 @@ export const settings = definePluginSettings({
     },
     enableNumberKeySwitching: {
         type: OptionType.BOOLEAN,
-        description: "Enable number keys (1-9) to switch tabs",
+        description: "Enable Alt+1-9 to switch tabs",
         default: true,
         restartNeeded: false
     },
     numberKeySwitchCount: {
         type: OptionType.SLIDER,
-        description: "Number of tabs accessible via number keys (1-9)",
+        description: "Number of tabs reachable with Alt+1-9",
         markers: makeRange(1, 9, 1),
         default: 3,
         stickToMarkers: true,
@@ -556,5 +557,35 @@ export const settings = definePluginSettings({
         default: 0,
         stickToMarkers: true,
         restartNeeded: false
+    },
+    cycleOrder: {
+        type: OptionType.SELECT,
+        description: "Order Ctrl+Tab moves through tabs in",
+        options: [
+            { label: "Left to right", value: "position", default: true },
+            { label: "Last used first", value: "recent" }
+        ],
+        restartNeeded: false
+    },
+    autoCompactAfterHours: {
+        type: OptionType.SLIDER,
+        description: "Make tabs compact after this many hours without a visit (0 = off)",
+        markers: [0, 1, 2, 4, 8, 12, 24],
+        default: 0,
+        stickToMarkers: true,
+        restartNeeded: false
+    },
+    autoCloseAfterDays: {
+        type: OptionType.SLIDER,
+        description: "Close unpinned tabs after this many days without a visit (0 = off)",
+        markers: [0, 1, 3, 7, 14, 30],
+        default: 0,
+        stickToMarkers: true,
+        restartNeeded: false
+    },
+    tabSets: {
+        type: OptionType.CUSTOM,
+        description: "",
+        default: {} as Record<string, Record<string, TabsSnapshot>>
     }
 });

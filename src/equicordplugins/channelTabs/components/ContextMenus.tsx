@@ -8,12 +8,64 @@ import { BaseText } from "@components/BaseText";
 import { Heading } from "@components/Heading";
 import { BookCheckIcon, OpenExternalIcon, PencilIcon, StarFilled, StarOutlined, TrashIcon, UnsendIcon, WindowTopOutlineIcon, XLargeBoldIcon } from "@components/Icons";
 import { Paragraph } from "@components/Paragraph";
-import { bookmarkFolderColors, bookmarkPlaceholderName, closeGroup, closeOtherTabs, closeTab, closeTabsToTheLeft, closeTabsToTheRight, createTab, duplicateTab, getDiscordFolderIcon, getDiscordFolderIconNames, groupLabel, hasClosedTabs, isBookmarkFolder, openedTabs, recentlyClosedTabs, removeFromGroup, renameGroup, reopenClosedTab, reopenClosedTabAt, settings, toggleCompactTab, toggleGroupCollapsed, togglePin, ungroup } from "@equicordplugins/channelTabs/util";
+import { bookmarkFolderColors, bookmarkPlaceholderName, closeGroup, closeOtherTabs, closeTabAnimated, closeTabsToTheLeft, closeTabsToTheRight, createTab, deleteTabSet, duplicateTab, getDiscordFolderIcon, getDiscordFolderIconNames, groupLabel, hasClosedTabs, isBookmarkFolder, isTabSelected, moveToTab, openedTabs, openTabSet, recentlyClosedTabs, removeFromGroup, renameGroup, renameTab, reopenClosedTab, reopenClosedTabAt, saveTabSet, setGroupColor, settings, tabSetNames, tabTitle, tintColors, toggleCompactTab, toggleGroupCollapsed, togglePin, ungroup } from "@equicordplugins/channelTabs/util";
 import { Bookmark, BookmarkFolder, Bookmarks, ChannelTabsProps, TabGroup, UseBookmarkMethods } from "@equicordplugins/channelTabs/util/types";
 import { getIntlMessage } from "@utils/discord";
 import { Margins } from "@utils/margins";
 import { RenderModalProps } from "@vencord/discord-types";
-import { Button, ChannelStore, closeModal, ColorPicker, FluxDispatcher, Menu, Modal, openModal, ReadStateStore, ReadStateUtils, Select, TextInput, useMemo, useState } from "@webpack/common";
+import { findByPropsLazy } from "@webpack";
+import { Button, ChannelStore, closeModal, ColorPicker, FluxDispatcher, Menu, Modal, openModal, ReadStateStore, ReadStateUtils, Select, showToast, TextInput, Toasts, useMemo, UserGuildSettingsStore, useState } from "@webpack/common";
+
+const { updateChannelOverrideSettings } = findByPropsLazy("updateChannelOverrideSettings");
+
+const MUTE_FOR: [string, number][] = [
+    ["For 15 Minutes", 900],
+    ["For 1 Hour", 3600],
+    ["For 3 Hours", 10800],
+    ["For 8 Hours", 28800],
+    ["For 24 Hours", 86400],
+    ["Until I turn it back on", -1]
+];
+
+const NOTIFY_LEVELS: [string, number][] = [
+    ["Use Category Default", 3],
+    ["All Messages", 0],
+    ["Only @mentions", 1],
+    ["Nothing", 2]
+];
+
+function markAllTabsRead() {
+    FluxDispatcher.dispatch({
+        type: "BULK_ACK",
+        context: "APP",
+        channels: openedTabs
+            .filter(tab => ReadStateStore.hasUnread(tab.channelId))
+            .map(tab => ({ channelId: tab.channelId, messageId: ReadStateStore.lastMessageId(tab.channelId), readStateType: 0 }))
+    });
+}
+
+function askForName({ title, heading, initial, placeholder, onSave }: {
+    title: string;
+    heading: string;
+    initial: string;
+    placeholder: string;
+    onSave: (name: string) => void;
+}) {
+    const key = openModal(modalProps =>
+        <NameModal
+            modalProps={modalProps}
+            title={title}
+            heading={heading}
+            initial={initial}
+            placeholder={placeholder}
+            onSave={name => {
+                onSave(name.trim());
+                closeModal(key);
+            }}
+            onCancel={() => closeModal(key)}
+        />
+    );
+}
 
 /** discord does not export a pin icon, and matching one out of webpack by its path data
  *  breaks on their next build, so this is drawn here */
@@ -57,8 +109,32 @@ const intToColor = (value: number | null) =>
         ? bookmarkFolderColors.Black
         : `#${value.toString(16).padStart(6, "0")}`;
 
+export function AllTabsMenu() {
+    return (
+        <Menu.Menu
+            navId="channeltabs-all-tabs"
+            onClose={() => FluxDispatcher.dispatch({ type: "CONTEXT_MENU_CLOSE" })}
+            aria-label="All Tabs"
+        >
+            <Menu.MenuGroup>
+                {openedTabs.map(tab => (
+                    <Menu.MenuRadioItem
+                        key={tab.id}
+                        id={`all-tabs-${tab.id}`}
+                        group="channeltabs-all-tabs"
+                        label={tabTitle(tab)}
+                        checked={isTabSelected(tab.id)}
+                        action={() => moveToTab(tab.id)}
+                    />
+                ))}
+            </Menu.MenuGroup>
+        </Menu.Menu>
+    );
+}
+
 export function BasicContextMenu() {
-    const { showBookmarkBar } = settings.use(["showBookmarkBar"]);
+    const { showBookmarkBar } = settings.use(["showBookmarkBar", "tabSets"]);
+    const sets = tabSetNames();
 
     return (
         <Menu.Menu
@@ -66,6 +142,39 @@ export function BasicContextMenu() {
             onClose={() => FluxDispatcher.dispatch({ type: "CONTEXT_MENU_CLOSE" })}
             aria-label="ChannelTabs Context Menu"
         >
+            <Menu.MenuGroup>
+                <Menu.MenuItem
+                    id="mark-all-tabs-read"
+                    label="Mark All Tabs Read"
+                    disabled={!openedTabs.some(tab => ReadStateStore.hasUnread(tab.channelId))}
+                    action={markAllTabsRead}
+                />
+            </Menu.MenuGroup>
+            <Menu.MenuGroup>
+                <Menu.MenuItem
+                    id="save-tab-set"
+                    label="Save Tab Set"
+                    action={() => askForName({
+                        title: "Save Tab Set",
+                        heading: "Name",
+                        initial: "",
+                        placeholder: `Set ${sets.length + 1}`,
+                        onSave: name => {
+                            saveTabSet(name || `Set ${sets.length + 1}`);
+                            showToast("Tab set saved", Toasts.Type.SUCCESS);
+                        }
+                    })}
+                />
+                <Menu.MenuItem id="tab-sets" label="Tab Sets" disabled={!sets.length}>
+                    {sets.map(name => (
+                        <Menu.MenuItem key={name} id={`tab-set-${name}`} label={name} action={() => openTabSet(name)}>
+                            <Menu.MenuItem id={`tab-set-${name}-open`} label="Open" action={() => openTabSet(name)} />
+                            <Menu.MenuItem id={`tab-set-${name}-update`} label="Replace With Open Tabs" action={() => saveTabSet(name)} />
+                            <Menu.MenuItem id={`tab-set-${name}-delete`} label="Delete" color="danger" action={() => deleteTabSet(name)} />
+                        </Menu.MenuItem>
+                    ))}
+                </Menu.MenuItem>
+            </Menu.MenuGroup>
             <Menu.MenuGroup>
                 <Menu.MenuCheckboxItem
                     checked={showBookmarkBar}
@@ -546,6 +655,11 @@ export function TabContextMenu({ tab }: { tab: ChannelTabsProps; }) {
     const channel = ChannelStore.getChannel(tab.channelId);
     const [compact, setCompact] = useState(tab.compact);
     const { showBookmarkBar } = settings.use(["showBookmarkBar"]);
+    const guildId = channel?.guild_id ?? null;
+    const muted = !!channel && UserGuildSettingsStore.isChannelMuted(guildId, channel.id);
+    const notifyLevel = guildId && channel
+        ? UserGuildSettingsStore.getChannelOverrides(guildId)?.[channel.id]?.message_notifications ?? 3
+        : undefined;
 
     return (
         <Menu.Menu
@@ -583,19 +697,68 @@ export function TabContextMenu({ tab }: { tab: ChannelTabsProps; }) {
                         toggleCompactTab(tab.id);
                     }}
                 />
+                <Menu.MenuItem
+                    id="rename-tab"
+                    label="Rename Tab"
+                    icon={PencilIcon}
+                    leadingAccessory={{ type: "icon", icon: PencilIcon }}
+                    action={() => askForName({
+                        title: "Rename Tab",
+                        heading: "Tab Name",
+                        initial: tab.label ?? "",
+                        placeholder: tabTitle({ ...tab, label: undefined }),
+                        onSave: name => renameTab(tab.id, name)
+                    })}
+                />
                 {tab.groupId && <Menu.MenuItem
                     id="remove-from-group"
                     label="Remove from Group"
                     action={() => removeFromGroup(tab.id, true)}
                 />}
             </Menu.MenuGroup>
+            {channel && <Menu.MenuGroup>
+                {muted
+                    ? <Menu.MenuItem
+                        id="unmute-channel"
+                        label="Unmute Channel"
+                        action={() => updateChannelOverrideSettings(guildId, channel.id, { muted: false })}
+                    />
+                    : <Menu.MenuItem id="mute-channel" label="Mute Channel">
+                        {MUTE_FOR.map(([label, seconds]) => (
+                            <Menu.MenuItem
+                                key={seconds}
+                                id={`mute-channel-${seconds}`}
+                                label={label}
+                                action={() => updateChannelOverrideSettings(guildId, channel.id, {
+                                    muted: true,
+                                    mute_config: {
+                                        selected_time_window: seconds,
+                                        end_time: seconds === -1 ? null : new Date(Date.now() + seconds * 1000).toISOString()
+                                    }
+                                })}
+                            />
+                        ))}
+                    </Menu.MenuItem>}
+                {notifyLevel !== undefined && <Menu.MenuItem id="notification-settings" label="Notification Settings">
+                    {NOTIFY_LEVELS.map(([label, level]) => (
+                        <Menu.MenuRadioItem
+                            key={level}
+                            id={`notify-${level}`}
+                            group="channeltabs-notify"
+                            label={label}
+                            checked={notifyLevel === level}
+                            action={() => updateChannelOverrideSettings(guildId, channel.id, { message_notifications: level })}
+                        />
+                    ))}
+                </Menu.MenuItem>}
+            </Menu.MenuGroup>}
             {openedTabs.length !== 1 && <Menu.MenuGroup>
                 <Menu.MenuItem
                     id="close-tab"
                     label="Close Tab"
                     icon={XLargeBoldIcon}
                     leadingAccessory={{ type: "icon", icon: XLargeBoldIcon }}
-                    action={() => closeTab(tab.id)}
+                    action={() => closeTabAnimated(tab.id)}
                 />
                 <Menu.MenuItem
                     id="duplicate-tab"
@@ -661,20 +824,22 @@ export function TabContextMenu({ tab }: { tab: ChannelTabsProps; }) {
     );
 }
 
-function RenameGroupModal({ modalProps, modalKey, group, onSave }: {
+function NameModal({ modalProps, title, heading, initial, placeholder, onSave, onCancel }: {
     modalProps: RenderModalProps,
-    modalKey: string,
-    group: TabGroup,
+    title: string,
+    heading: string,
+    initial: string,
+    placeholder: string,
     onSave: (name: string) => void;
+    onCancel: () => void;
 }) {
-    const [name, setName] = useState(group.name ?? "");
-    const placeholder = groupLabel({ ...group, name: undefined });
+    const [name, setName] = useState(initial);
 
     return (
         <Modal
             {...modalProps}
             size="sm"
-            title={<BaseText size="lg" weight="semibold">Rename Group</BaseText>}
+            title={<BaseText size="lg" weight="semibold">{title}</BaseText>}
             actions={[
                 {
                     text: "Save",
@@ -684,15 +849,18 @@ function RenameGroupModal({ modalProps, modalKey, group, onSave }: {
                 {
                     text: "Cancel",
                     variant: "secondary",
-                    onClick: () => closeModal(modalKey)
+                    onClick: onCancel
                 }
             ]}
         >
-            <Heading className={Margins.top16}>Group Name</Heading>
+            <Heading className={Margins.top16}>{heading}</Heading>
             <TextInput
                 value={name}
                 placeholder={placeholder}
                 onChange={setName}
+                onKeyDown={e => {
+                    if (e.key === "Enter") onSave(name);
+                }}
             />
         </Modal>
     );
@@ -714,20 +882,26 @@ export function GroupContextMenu({ group }: { group: TabGroup; }) {
                 <Menu.MenuItem
                     id="rename-group"
                     label="Rename Group"
-                    action={() => {
-                        const key = openModal(modalProps =>
-                            <RenameGroupModal
-                                modalProps={modalProps}
-                                modalKey={key}
-                                group={group}
-                                onSave={name => {
-                                    renameGroup(group.id, name);
-                                    closeModal(key);
-                                }}
-                            />
-                        );
-                    }}
+                    action={() => askForName({
+                        title: "Rename Group",
+                        heading: "Group Name",
+                        initial: group.name ?? "",
+                        placeholder: groupLabel({ ...group, name: undefined }),
+                        onSave: name => renameGroup(group.id, name)
+                    })}
                 />
+                <Menu.MenuItem id="group-colour" label="Colour">
+                    {[["None", undefined] as const, ...tintColors].map(([name, hex]) => (
+                        <Menu.MenuRadioItem
+                            key={name}
+                            id={`group-colour-${name}`}
+                            group="channeltabs-group-colour"
+                            label={name}
+                            checked={group.color === hex}
+                            action={() => setGroupColor(group.id, hex)}
+                        />
+                    ))}
+                </Menu.MenuItem>
             </Menu.MenuGroup>
             <Menu.MenuGroup>
                 <Menu.MenuItem

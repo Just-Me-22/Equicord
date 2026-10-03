@@ -7,7 +7,7 @@
 import { Flex } from "@components/Flex";
 import { Heading } from "@components/Heading";
 import { Paragraph } from "@components/Paragraph";
-import { autoGroupAll, BasicChannelTabsProps, ChannelTabsProps, clearStaleNavigationContext, closeTab, createTab, getGroupSegments, handleChannelSwitch, isNavigationFromSource, isTabDragging, isTabSelected, jumpToUnreadTab, moveCurrentTab, moveToTab, openedTabs, openStartupTabs, saveTabs, settings, setUpdaterFunction, ungroupAutoGroups, useGhostTabs } from "@equicordplugins/channelTabs/util";
+import { applyIdleRules, autoGroupAll, BasicChannelTabsProps, ChannelTabsProps, clearStaleNavigationContext, closeTabAnimated, createTab, cycleRecentTab, endRecentCycle, getGroupSegments, handleChannelSwitch, isNavigationFromSource, isTabDragging, isTabSelected, jumpToUnreadTab, lastClosedTab, moveCurrentTab, moveToTab, openedTabs, openStartupTabs, saveTabs, settings, setUpdaterFunction, tabTitle, undoClose, ungroupAutoGroups, useGhostTabs } from "@equicordplugins/channelTabs/util";
 import { IS_MAC } from "@utils/constants";
 import { classNameFactory } from "@utils/css";
 import { classes } from "@utils/misc";
@@ -19,7 +19,7 @@ import channelTabs from "..";
 import { anyTabHasMention } from "../util/tabs";
 import BookmarkContainer, { HorizontalScroller } from "./BookmarkContainer";
 import ChannelTab, { PreviewTab } from "./ChannelTab";
-import { BasicContextMenu } from "./ContextMenus";
+import { AllTabsMenu, BasicContextMenu } from "./ContextMenus";
 import TabGroup from "./TabGroup";
 
 type TabSet = Record<string, ChannelTabsProps[]>;
@@ -31,7 +31,7 @@ const cl = classNameFactory("vc-channeltabs-");
 /** a dm has no name of its own, so it is searched by who is in it */
 function tabText(tab: ChannelTabsProps): string {
     const channel = ChannelStore.getChannel(tab.channelId);
-    const parts: (string | null | undefined)[] = [channel?.name, GuildStore.getGuild(tab.guildId)?.name];
+    const parts: (string | null | undefined)[] = [tabTitle(tab), channel?.name, GuildStore.getGuild(tab.guildId)?.name];
 
     for (const one of channel?.rawRecipients ?? []) parts.push(one.username, one.global_name);
 
@@ -43,28 +43,16 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const searchInputRef = useRef<HTMLInputElement>(null);
+    const [searchIndex, setSearchIndex] = useState(0);
+    const [unreadOnly, setUnreadOnly] = useState(false);
     const [tabsOverflow, setTabsOverflow] = useState(false);
     const {
         showBookmarkBar,
         widerTabsAndBookmarks,
         tabWidthScale,
         tabHeightScale,
-        enableNumberKeySwitching,
-        numberKeySwitchCount,
-        enableCloseTabShortcut,
-        enableNewTabShortcut,
-        enableTabCycleShortcut,
-        enableMoveTabShortcut,
-        moveTabLeftKeybind,
-        moveTabRightKeybind,
         autoHideTabBar,
         revealOnMention,
-        enableUnreadJumpShortcut,
-        unreadJumpKeybind,
-        closeTabKeybind,
-        newTabKeybind,
-        cycleTabForwardKeybind,
-        cycleTabBackwardKeybind,
         tabBarPosition,
         animationDragDrop,
         animationEnterExit,
@@ -81,28 +69,16 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
         compactAutoExpandOnHover,
         newTabButtonBehavior,
         animationGroupExpand,
-        autoGroupSameServer
+        autoGroupSameServer,
+        autoCompactAfterHours,
+        autoCloseAfterDays
     } = settings.use([
         "showBookmarkBar",
         "widerTabsAndBookmarks",
         "tabWidthScale",
         "tabHeightScale",
-        "enableNumberKeySwitching",
-        "numberKeySwitchCount",
-        "enableCloseTabShortcut",
-        "enableNewTabShortcut",
-        "enableTabCycleShortcut",
-        "enableMoveTabShortcut",
-        "moveTabLeftKeybind",
-        "moveTabRightKeybind",
         "autoHideTabBar",
         "revealOnMention",
-        "enableUnreadJumpShortcut",
-        "unreadJumpKeybind",
-        "closeTabKeybind",
-        "newTabKeybind",
-        "cycleTabForwardKeybind",
-        "cycleTabBackwardKeybind",
         "tabBarPosition",
         "animationDragDrop",
         "animationEnterExit",
@@ -119,11 +95,30 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
         "compactAutoExpandOnHover",
         "newTabButtonBehavior",
         "animationGroupExpand",
-        "autoGroupSameServer"
+        "autoGroupSameServer",
+        "autoCompactAfterHours",
+        "autoCloseAfterDays"
     ]);
     const GhostTabs = useGhostTabs();
     const isFullscreen = useStateFromStores([], () => ChannelRTCStore.isFullscreenInContext() ?? false);
     const hasMention = useStateFromStores([ReadStateStore, SelectedChannelStore], () => anyTabHasMention());
+    const unreadIds = useStateFromStores([ReadStateStore], () => unreadOnly
+        ? openedTabs.filter(tab => tab && (ReadStateStore.hasUnread(tab.channelId) || isTabSelected(tab.id))).map(tab => tab.id).join(",")
+        : "", [unreadOnly]);
+    const closed = lastClosedTab();
+
+    useEffect(() => {
+        if (!closed) return;
+        const timer = setTimeout(() => _update(), closed.remaining);
+        return () => clearTimeout(timer);
+    }, [closed?.tab]);
+
+    useEffect(() => {
+        if (!userId || (!autoCompactAfterHours && !autoCloseAfterDays)) return;
+        applyIdleRules();
+        const timer = setInterval(applyIdleRules, 60_000);
+        return () => clearInterval(timer);
+    }, [userId, autoCompactAfterHours, autoCloseAfterDays]);
 
     useEffect(() => {
         if (!isSearchOpen) return;
@@ -182,14 +177,7 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
         const scroller = scrollerRef.current;
         if (!scroller) return;
 
-        const checkOverflow = () => {
-            if (!newTabButtonBehavior) {
-                setTabsOverflow(true);
-                return;
-            }
-            const overflow = scroller.scrollWidth > scroller.clientWidth;
-            setTabsOverflow(overflow);
-        };
+        const checkOverflow = () => setTabsOverflow(scroller.scrollWidth > scroller.clientWidth);
 
         checkOverflow();
 
@@ -206,137 +194,93 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
             const hasShift = parts.includes("SHIFT");
             const hasAlt = parts.includes("ALT");
             const mainKey = parts[parts.length - 1].toLowerCase();
-
-            const ctrlPressed = event.ctrlKey || event.metaKey;
-            const shiftPressed = event.shiftKey;
-            const altPressed = event.altKey;
             const keyPressed = event.key.toLowerCase();
+            const expected = mainKey === "space" ? " " : mainKey;
 
-            // special handling for TAB key
-            if (mainKey === "tab") {
-                return hasCtrl === ctrlPressed && hasShift === shiftPressed && hasAlt === altPressed && keyPressed === "tab";
-            }
-
-            // special handling for SPACE
-            if (mainKey === "space") {
-                return hasCtrl === ctrlPressed && hasShift === shiftPressed && hasAlt === altPressed && keyPressed === " ";
-            }
-
-            return hasCtrl === ctrlPressed && hasShift === shiftPressed && hasAlt === altPressed && keyPressed === mainKey;
+            return hasCtrl === (event.ctrlKey || event.metaKey) && hasShift === event.shiftKey && hasAlt === event.altKey && keyPressed === expected;
         };
 
-        const handleKeyDown = (event: KeyboardEvent) => {
-            const target = event.target as HTMLElement;
+        const editable = (target: HTMLElement) => target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable;
 
-            // skip if typing in input fields
-            if (
-                target.tagName === "INPUT" ||
-                target.tagName === "TEXTAREA" ||
-                target.isContentEditable
-            ) {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            const { store } = settings;
+            const typedCharacter = !(event.ctrlKey || event.metaKey || event.altKey) || event.getModifierState("AltGraph");
+            if (editable(event.target as HTMLElement) && typedCharacter) return;
+
+            const digit = /^Digit([1-9])$/.exec(event.code);
+            if (store.enableNumberKeySwitching && digit && event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+                const number = Number(digit[1]);
+                const tab = openedTabs[number - 1];
+                if (tab && number <= store.numberKeySwitchCount) {
+                    event.preventDefault();
+                    moveToTab(tab.id);
+                }
                 return;
             }
 
-            // 1. number key switching (1-9)
-            if (enableNumberKeySwitching) {
-                const keyNumber = parseInt(event.key, 10);
-                if (!isNaN(keyNumber) && keyNumber >= 1 && keyNumber <= numberKeySwitchCount) {
-                    const tabIndex = keyNumber - 1;
-                    if (openedTabs[tabIndex]) {
-                        event.preventDefault();
-                        moveToTab(openedTabs[tabIndex].id);
-                        return;
-                    }
-                }
-            }
-
-            // 2. move the current tab along the bar
-            if (enableMoveTabShortcut && matchesKeybind(event, moveTabLeftKeybind)) {
+            if (store.enableMoveTabShortcut && matchesKeybind(event, store.moveTabLeftKeybind)) {
                 event.preventDefault();
                 moveCurrentTab(-1);
                 return;
             }
 
-            if (enableMoveTabShortcut && matchesKeybind(event, moveTabRightKeybind)) {
+            if (store.enableMoveTabShortcut && matchesKeybind(event, store.moveTabRightKeybind)) {
                 event.preventDefault();
                 moveCurrentTab(1);
                 return;
             }
 
-            // 3. jump to the next unread tab (default: CTRL+SHIFT+U)
-            if (enableUnreadJumpShortcut && matchesKeybind(event, unreadJumpKeybind)) {
+            if (store.enableUnreadJumpShortcut && matchesKeybind(event, store.unreadJumpKeybind)) {
                 event.preventDefault();
                 event.stopPropagation();
                 jumpToUnreadTab();
                 return;
             }
 
-            // 3. close tab shortcut (default: CTRL+W)
-            if (enableCloseTabShortcut && matchesKeybind(event, closeTabKeybind)) {
+            if (store.enableCloseTabShortcut && matchesKeybind(event, store.closeTabKeybind)) {
                 event.preventDefault();
                 const currentTab = openedTabs.find(t => isTabSelected(t.id));
-                if (currentTab && openedTabs.length > 1) {
-                    closeTab(currentTab.id);
-                }
+                if (currentTab) closeTabAnimated(currentTab.id);
                 return;
             }
 
-            // 3. new tab shortcut (default: CTRL+T)
-            if (enableNewTabShortcut && matchesKeybind(event, newTabKeybind)) {
+            if (store.enableNewTabShortcut && matchesKeybind(event, store.newTabKeybind)) {
                 event.preventDefault();
-                event.stopPropagation(); // prevent discord's quick switcher from seeing this
-                createTab(props, true);
+                event.stopPropagation();
+                createTab(currentChannelRef.current, true);
+                FluxDispatcher.dispatch({ type: "QUICKSWITCHER_SHOW", query: "", queryMode: null });
                 return;
             }
 
-            // 4. cycle tabs forward (default: CTRL+TAB)
-            if (enableTabCycleShortcut && matchesKeybind(event, cycleTabForwardKeybind)) {
-                event.preventDefault();
-                event.stopPropagation(); // prevent discord's guild switcher from seeing this
-                const currentIndex = openedTabs.findIndex(t => isTabSelected(t.id));
-                if (currentIndex !== -1 && openedTabs.length > 1) {
-                    const nextIndex = (currentIndex + 1) % openedTabs.length;
-                    moveToTab(openedTabs[nextIndex].id);
-                }
+            const forward = matchesKeybind(event, store.cycleTabForwardKeybind);
+            if (!store.enableTabCycleShortcut || !(forward || matchesKeybind(event, store.cycleTabBackwardKeybind))) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+            if (store.cycleOrder === "recent") {
+                cycleRecentTab(forward ? 1 : -1);
                 return;
             }
 
-            // 5. cycle tabs backward (default: CTRL+SHIFT+TAB)
-            if (enableTabCycleShortcut && matchesKeybind(event, cycleTabBackwardKeybind)) {
-                event.preventDefault();
-                event.stopPropagation(); // prevent Discord's guild switcher from seeing this
-                const currentIndex = openedTabs.findIndex(t => isTabSelected(t.id));
-                if (currentIndex !== -1 && openedTabs.length > 1) {
-                    const nextIndex = (currentIndex - 1 + openedTabs.length) % openedTabs.length;
-                    moveToTab(openedTabs[nextIndex].id);
-                }
-                return;
-            }
+            const currentIndex = openedTabs.findIndex(t => isTabSelected(t.id));
+            if (currentIndex !== -1 && openedTabs.length > 1)
+                moveToTab(openedTabs[(currentIndex + (forward ? 1 : -1) + openedTabs.length) % openedTabs.length].id);
+        };
+
+        const handleKeyUp = (event: KeyboardEvent) => {
+            if (event.key === "Control" || event.key === "Meta") endRecentCycle();
         };
 
         document.addEventListener("keydown", handleKeyDown, true);
+        document.addEventListener("keyup", handleKeyUp, true);
+        window.addEventListener("blur", endRecentCycle);
 
         return () => {
             document.removeEventListener("keydown", handleKeyDown, true);
+            document.removeEventListener("keyup", handleKeyUp, true);
+            window.removeEventListener("blur", endRecentCycle);
         };
-    }, [
-        enableNumberKeySwitching,
-        numberKeySwitchCount,
-        enableCloseTabShortcut,
-        closeTabKeybind,
-        enableNewTabShortcut,
-        newTabKeybind,
-        enableTabCycleShortcut,
-        cycleTabForwardKeybind,
-        cycleTabBackwardKeybind,
-        enableUnreadJumpShortcut,
-        unreadJumpKeybind,
-        enableMoveTabShortcut,
-        moveTabLeftKeybind,
-        moveTabRightKeybind,
-        props,
-        openedTabs
-    ]);
+    }, []);
 
     useEffect(() => {
         if (userId) {
@@ -371,9 +315,13 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
     const shouldFollowNewTabButton = newTabButtonBehavior && !tabsOverflow;
     const query = searchQuery.trim().toLowerCase();
     const searchActive = query.length > 0;
-    const matching = searchActive
-        ? openedTabs.map((tab, i) => ({ tab, i })).filter(({ tab }) => tab != null && tabText(tab).includes(query))
+    const filtering = searchActive || unreadOnly;
+    const unread = new Set(unreadIds ? unreadIds.split(",").map(Number) : []);
+    const visible = filtering
+        ? openedTabs.map((tab, i) => ({ tab, i })).filter(({ tab }) =>
+            tab != null && (!searchActive || tabText(tab).includes(query)) && (!unreadOnly || unread.has(tab.id)))
         : [];
+    const focused = searchActive ? visible[Math.min(searchIndex, visible.length - 1)] : undefined;
 
     const searchBox = (
         <div className={classes(cl("tab-search-shell"), isSearchOpen && cl("tab-search-shell-open"), searchActive && cl("search-counted"))}>
@@ -383,18 +331,33 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
                     inputClassName={cl("tab-search-input")}
                     style={{ width: "100%" }}
                     value={searchQuery}
-                    onChange={setSearchQuery}
+                    onChange={value => {
+                        setSearchQuery(value);
+                        setSearchIndex(0);
+                    }}
                     placeholder="Search tabs"
                     onBlur={() => {
                         if (!searchQuery.trim()) setIsSearchOpen(false);
                     }}
                     onKeyDown={e => {
+                        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                            e.preventDefault();
+                            const step = e.key === "ArrowDown" ? 1 : -1;
+                            setSearchIndex(i => Math.max(0, Math.min(i + step, visible.length - 1)));
+                            return;
+                        }
+                        if (e.key === "Enter" && focused) {
+                            moveToTab(focused.tab.id);
+                            setSearchQuery("");
+                            setIsSearchOpen(false);
+                            return;
+                        }
                         if (e.key !== "Escape") return;
                         if (searchQuery.trim()) setSearchQuery("");
                         else setIsSearchOpen(false);
                     }}
                 />
-                {searchActive && <span className={cl("search-count")}>{matching.length}</span>}
+                {searchActive && <span className={cl("search-count")}>{visible.length}</span>}
             </div>
             <Tooltip text="Search tabs" position="left">
                 {p => <button
@@ -415,6 +378,36 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
                 </button>}
             </Tooltip>
         </div>
+    );
+
+    const unreadButton = (
+        <Tooltip text={unreadOnly ? "Show all tabs" : "Only unread tabs"} position="left">
+            {p => <button
+                {...p}
+                className={classes(cl("button"), cl("bar-button"), unreadOnly && cl("bar-button-active"))}
+                aria-pressed={unreadOnly}
+                onClick={() => setUnreadOnly(on => !on)}
+            >
+                <svg width={20} height={20} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <circle cx="12" cy="12" r="7" stroke="currentColor" strokeWidth="2" />
+                    <circle cx="12" cy="12" r="3" fill="currentColor" />
+                </svg>
+            </button>}
+        </Tooltip>
+    );
+
+    const allTabsButton = tabsOverflow && (
+        <Tooltip text="All tabs" position="left">
+            {p => <button
+                {...p}
+                className={classes(cl("button"), cl("bar-button"))}
+                onClick={e => ContextMenuApi.openContextMenu(e, () => <AllTabsMenu />)}
+            >
+                <svg width={20} height={20} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="m6 9 6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+            </button>}
+        </Tooltip>
     );
 
     const newTabButton = (
@@ -455,14 +448,19 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
             onContextMenu={e => ContextMenuApi.openContextMenu(e, () => <BasicContextMenu />)}
         >
             {showBookmarkBar && <BookmarkContainer {...props} userId={userId} />}
-            <div className={cl("tab-container", { "tab-container-dragging": isTabDragging() })}>
+            <div
+                className={cl("tab-container", { "tab-container-dragging": isTabDragging() })}
+                onDoubleClick={e => {
+                    if (e.target === e.currentTarget) createTab(props, true);
+                }}
+            >
                 <HorizontalScroller
                     customRef={node => { scrollerRef.current = node; }}
                     className={cl("tab-scroller", shouldFollowNewTabButton && "tab-scroller-following")}
                 >
-                    {searchActive
-                        ? matching.map(({ tab, i }) =>
-                            <ChannelTab {...tab} index={i} key={tab.id} searchActive={searchActive} />
+                    {filtering
+                        ? visible.map(({ tab, i }) =>
+                            <ChannelTab {...tab} index={i} key={tab.id} searchActive={filtering} searchFocused={focused?.tab.id === tab.id} />
                         )
                         : segments}
                     {GhostTabs}
@@ -470,9 +468,15 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
                 </HorizontalScroller>
 
                 {!shouldFollowNewTabButton && newTabButton}
+                {allTabsButton}
+                {unreadButton}
                 {searchBox}
-            </div >
+            </div>
 
+            {closed && <button className={cl("button", "undo")} onClick={undoClose}>
+                <span className={cl("undo-name")}>Closed {tabTitle(closed.tab)}</span>
+                <span className={cl("undo-action")}>Undo</span>
+            </button>}
         </div>
     );
 }

@@ -5,7 +5,7 @@
  */
 
 import { BaseText } from "@components/BaseText";
-import { ChannelTabsProps, getGroupActiveTab, groupLabel, groupTabs, isTabSelected, moveToTab, removeFromGroup, settings, TabGroup as TabGroupType, toggleGroupCollapsed } from "@equicordplugins/channelTabs/util";
+import { ChannelTabsProps, getGroupActiveTab, groupTabs, isTabSelected, moveToTab, removeFromGroup, settings, TabGroup as TabGroupType, tabTitle, toggleGroupCollapsed } from "@equicordplugins/channelTabs/util";
 import { classNameFactory } from "@utils/css";
 import { ChannelStore, ContextMenuApi, GuildStore, ReadStateStore, useDrag, useDrop, useEffect, useRef, UserStore, useState, useStateFromStores } from "@webpack/common";
 
@@ -18,17 +18,6 @@ function ChevronIcon() {
     return <svg width={16} height={16} viewBox="0 0 24 24" className={cl("group-chevron-icon")}>
         <path fill="var(--interactive-icon-default)" d="M9.3 5.3a1 1 0 0 0 0 1.4l5.3 5.3-5.3 5.3a1 1 0 1 0 1.4 1.4l6-6a1 1 0 0 0 0-1.4l-6-6a1 1 0 0 0-1.4 0Z" />
     </svg>;
-}
-
-function tabLabel(tab: ChannelTabsProps, group: TabGroupType) {
-    const channel = ChannelStore.getChannel(tab.channelId);
-    if (channel?.name) return channel.name;
-
-    const people = (channel?.recipients ?? []).map(id => {
-        const user = UserStore.getUser(id);
-        return user?.globalName || user?.username;
-    }).filter(Boolean);
-    return people.join(", ") || groupLabel(group);
 }
 
 function TabIcon({ tab }: { tab: ChannelTabsProps; }) {
@@ -74,7 +63,7 @@ export default function TabGroup({ group, tabs, index }: { group: TabGroupType; 
         clearTimeout(hoverTimer.current);
         setFlyoutAt(null);
     };
-    const label = tabLabel(activeTab, group);
+    const label = tabTitle(activeTab);
     const showFlyout = groupHoverMenu && group.collapsed && flyoutAt;
 
     const [, drag] = useDrag(() => ({
@@ -96,8 +85,10 @@ export default function TabGroup({ group, tabs, index }: { group: TabGroupType; 
         className={cl("group", {
             "group-expanded": !group.collapsed,
             "group-selected": group.collapsed && tabs.some(tab => isTabSelected(tab.id)),
-            "group-drop-target": isOver
+            "group-drop-target": isOver,
+            "group-colored": !!group.color
         })}
+        style={group.color ? { "--vc-channeltabs-group-color": group.color } as React.CSSProperties : undefined}
         onContextMenu={e => ContextMenuApi.openContextMenu(e, () => <GroupContextMenu group={group} />)}
         onMouseEnter={openFlyout}
         onMouseLeave={closeFlyout}
@@ -136,7 +127,7 @@ export default function TabGroup({ group, tabs, index }: { group: TabGroupType; 
                     moveToTab(tab.id);
                 }}
             >
-                <BaseText className={cl("name-text")}>{tabLabel(tab, group)}</BaseText>
+                <BaseText className={cl("name-text")}>{tabTitle(tab)}</BaseText>
                 <NotificationDot channelIds={[tab.channelId]} />
             </button>)}
         </div>}

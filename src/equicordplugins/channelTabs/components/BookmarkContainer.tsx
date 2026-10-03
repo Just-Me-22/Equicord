@@ -474,6 +474,18 @@ function Bookmark(props: BookmarkProps & { isExpanded?: boolean; onToggleFolder?
 
 export function HorizontalScroller({ children, className, customRef }: React.PropsWithChildren<{ className?: string; customRef?: (node: HTMLDivElement) => void; }>) {
     const internalRef = useRef<HTMLDivElement>(null);
+    const [fade, setFade] = useState({ start: false, end: false });
+
+    const measure = () => {
+        const element = internalRef.current;
+        if (!element) return;
+
+        const start = element.scrollLeft > 1;
+        const end = element.scrollLeft + element.clientWidth < element.scrollWidth - 1;
+        setFade(prev => prev.start === start && prev.end === end ? prev : { start, end });
+    };
+
+    useEffect(measure);
 
     useEffect(() => {
         const element = internalRef.current;
@@ -484,8 +496,15 @@ export function HorizontalScroller({ children, className, customRef }: React.Pro
             element.scrollLeft += e.deltaX + e.deltaY;
         };
 
+        const observer = new ResizeObserver(measure);
+        observer.observe(element);
         element.addEventListener("wheel", handleWheel);
-        return () => element.removeEventListener("wheel", handleWheel);
+        element.addEventListener("scroll", measure, { passive: true });
+        return () => {
+            observer.disconnect();
+            element.removeEventListener("wheel", handleWheel);
+            element.removeEventListener("scroll", measure);
+        };
     }, []);
 
     // Combine refs
@@ -495,7 +514,7 @@ export function HorizontalScroller({ children, className, customRef }: React.Pro
     };
 
     return (
-        <div className={classes(cl("scroller"), className)} ref={combinedRef}>
+        <div className={classes(cl("scroller"), fade.start && cl("scroller-fade-start"), fade.end && cl("scroller-fade-end"), className)} ref={combinedRef}>
             {children}
         </div>
     );

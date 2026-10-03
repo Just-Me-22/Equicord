@@ -15,21 +15,25 @@ export interface ChannelTabsProps extends BasicChannelTabsProps {
     id: number;
     groupId?: string;
     escapedGroup?: boolean;
+    label?: string;
+    visitedAt?: number;
 }
 export interface TabGroup {
     id: string;
     name?: string;
     guildId?: string;
+    color?: string;
     collapsed: boolean;
     auto: boolean;
 }
 export type TabSegment = ChannelTabsProps | { group: TabGroup; tabs: ChannelTabsProps[]; };
+export interface TabsSnapshot {
+    openTabs: ChannelTabsProps[],
+    openTabIndex: number;
+    tabGroups?: TabGroup[];
+}
 export interface PersistedTabs {
-    [userId: string]: {
-        openTabs: ChannelTabsProps[],
-        openTabIndex: number;
-        tabGroups?: TabGroup[];
-    };
+    [userId: string]: TabsSnapshot;
 }
 
 export interface Bookmark {

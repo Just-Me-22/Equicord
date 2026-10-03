@@ -7,6 +7,19 @@
     --channeltabs-white: #fff;
     --channeltabs-orange: #e67e22;
     --channeltabs-pink: #ff73fa;
+    --vc-channeltabs-radius: 8px;
+    --vc-channeltabs-radius-small: 6px;
+    --vc-channeltabs-fade: 0.15s ease;
+    --vc-channeltabs-move: 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.theme-light {
+    --channeltabs-pink: #c81fc0;
+}
+
+.vc-channeltabs-container,
+.channelTabs-keybind-settings {
+    --vc-channeltabs-accent: var(--main-color, var(--brand-experiment, var(--brand-500)));
 }
 
 .vc-channeltabs-icon {
@@ -16,13 +29,15 @@
 }
 
 .vc-channeltabs-guild-acronym-icon {
-    height: 1.25rem;
+    display: grid;
+    place-items: center;
+    height: 1.5rem;
     width: 1.5rem;
     min-width: 1.5rem;
     border-radius: 50%;
-    padding-top: 0.25rem;
-    background-color: var(--background-primary);
+    background-color: var(--background-mod-strong);
     overflow: hidden;
+    white-space: nowrap;
 }
 
 .vc-channeltabs-name-text {
@@ -32,29 +47,15 @@
     margin-left: 0.125rem;
     font-weight: 500;
     color: var(--text-default);
-    transition: color 0.15s ease;
+    transition: color var(--vc-channeltabs-fade);
 }
 
 .vc-channeltabs-tab-inner {
     position: relative;
-    border-radius: 10px;
-    padding: 0 28px 0 0;
     display: flex;
     flex-direction: row;
     align-items: center;
     gap: 0.5rem;
-}
-
-.vc-channeltabs-typing-indicator {
-    position: absolute;
-    top: 50%;
-    right: 4px;
-    transform: translateY(-50%);
-}
-
-.vc-channeltabs-tab-compact .vc-channeltabs-typing-indicator {
-    position: static;
-    transform: none;
 }
 
 .vc-channeltabs-tab-container,
@@ -79,12 +80,15 @@
        its own height down to whatever the app leaves over, and the rows collapse inside
        it. the chat above is the thing that should give way, not the bar. */
     flex-shrink: 0;
+    position: relative;
     -webkit-app-region: no-drag;
     background-color: var(--background-primary);
     box-shadow: inset 0 1px 0 var(--background-base-low);
 }
 
 .vc-channeltabs-container-top {
+    --vc-channeltabs-enter-y: -4px;
+
     padding-left: 4px;
     box-shadow: inset 0 -1px 0 var(--background-base-low);
     grid-area: notice;
@@ -125,6 +129,18 @@
     display: none;
 }
 
+.vc-channeltabs-scroller-fade-start {
+    mask-image: linear-gradient(to right, transparent, #000 24px);
+}
+
+.vc-channeltabs-scroller-fade-end {
+    mask-image: linear-gradient(to left, transparent, #000 24px);
+}
+
+.vc-channeltabs-scroller-fade-start.vc-channeltabs-scroller-fade-end {
+    mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+}
+
 /* tab scroller for horizontal overflow */
 .vc-channeltabs-tab-scroller {
     display: flex;
@@ -134,7 +150,7 @@
     white-space: nowrap;
     flex: 1;
     min-width: 0;
-    padding-top: 16px;
+    padding-top: 15px;
     padding-bottom: 15px;
     margin-top: -15px;
     margin-bottom: -15px;
@@ -157,14 +173,14 @@
 
 .vc-channeltabs-bookmark-placeholder-text {
     color: var(--text-muted);
-    padding: 0.25rem 0 0 0.25rem;
+    padding-left: 0.25rem;
 }
 
 .vc-channeltabs-bookmark-star {
     fill: none;
     stroke: var(--text-muted);
     stroke-width: 0.075rem;
-    transition: fill 0.15s ease, stroke 0.15s ease;
+    transition: fill var(--vc-channeltabs-fade), stroke var(--vc-channeltabs-fade);
 }
 
 .vc-channeltabs-bookmark-star:hover {
@@ -172,8 +188,8 @@
 }
 
 .vc-channeltabs-bookmark-star-checked {
-    fill: var(--main-color, var(--brand-experiment, var(--brand-500)));
-    stroke: var(--main-color, var(--brand-experiment, var(--brand-500)));
+    fill: var(--vc-channeltabs-accent);
+    stroke: var(--vc-channeltabs-accent);
 }
 
 .vc-channeltabs-bookmark {
@@ -182,11 +198,11 @@
     max-width: calc(8rem * var(--tab-width-scale, 1));
     padding: 4px 8px;
     border: 1px solid transparent;
-    border-radius: 6px;
+    border-radius: var(--vc-channeltabs-radius-small);
     align-items: center;
     position: relative;
     cursor: pointer;
-    transition: border-color 0.14s ease, background-color 0.14s ease;
+    transition: border-color var(--vc-channeltabs-fade), background-color var(--vc-channeltabs-fade);
 }
 
 .vc-channeltabs-bookmark.vc-channeltabs-wider {
@@ -207,7 +223,7 @@
     height: 1rem;
     width: 1rem;
     border-radius: 50%;
-    background-color: var(--background-primary);
+    background-color: var(--background-mod-strong);
     text-align: center;
 }
 
@@ -221,17 +237,17 @@
     flex-direction: row;
     justify-content: space-between;
     align-items: center;
-    border-radius: 10px;
+    border-radius: var(--vc-channeltabs-radius);
     width: auto;
     min-width: calc(8rem * var(--tab-width-scale, 1));
     max-width: calc(12rem * var(--tab-width-scale, 1));
     margin: 0 4px;
     background-color: color-mix(in srgb, var(--vc-channeltabs-guild, transparent) 14%, transparent);
-    border: 1px solid var(--background-mod-muted);
+    border: 1px solid transparent;
     transition:
-        background-color 0.15s ease,
-        border-color 0.15s ease,
-        opacity 0.15s ease;
+        background-color var(--vc-channeltabs-fade),
+        border-color var(--vc-channeltabs-fade),
+        opacity var(--vc-channeltabs-fade);
     min-height: calc(38px * var(--tab-height-scale, 1));
     padding: calc(6px * var(--tab-height-scale, 1)) 8px;
     position: relative;
@@ -251,22 +267,27 @@
     width: 6px;
     cursor: ew-resize;
     z-index: 10;
+}
+
+.vc-channeltabs-tab-resize-handle::after {
+    content: "";
+    position: absolute;
+    top: 25%;
+    right: 2px;
+    bottom: 25%;
+    width: 2px;
+    border-radius: 1px;
+    background: var(--hover-color, var(--vc-channeltabs-accent));
     opacity: 0;
-    background: var(--hover-color, var(--main-color, var(--brand-experiment, var(--brand-500))));
-    border-radius: 0 9px 9px 0;
-    transition: opacity 0.2s ease;
+    transition: opacity var(--vc-channeltabs-fade);
 }
 
-.vc-channeltabs-tab-resize-handle:hover {
-    opacity: 0.7 !important;
+.vc-channeltabs-tab-resize-handle:hover::after {
+    opacity: 1;
 }
 
-.vc-channeltabs-no-resize-handle-animation .vc-channeltabs-tab-resize-handle {
+.vc-channeltabs-no-resize-handle-animation .vc-channeltabs-tab-resize-handle::after {
     transition: none !important;
-}
-
-.vc-channeltabs-tab:hover .vc-channeltabs-tab-resize-handle {
-    opacity: 0.3;
 }
 
 .vc-channeltabs-tab-resizing {
@@ -290,8 +311,7 @@
 }
 
 .vc-channeltabs-tab-compact .vc-channeltabs-tab-inner {
-    padding-right: 0;
-    transition: padding-right 0.25s cubic-bezier(0.2, 0, 0, 1);
+    transition: padding-right var(--vc-channeltabs-move);
 }
 
 .vc-channeltabs-tab-compact:hover .vc-channeltabs-tab-inner,
@@ -308,9 +328,9 @@
     transform: translateX(-6px);
     interpolate-size: allow-keywords;
     transition:
-        width 0.25s cubic-bezier(0.2, 0, 0, 1),
-        opacity 0.2s ease-out,
-        transform 0.25s cubic-bezier(0.2, 0, 0, 1);
+        width var(--vc-channeltabs-move),
+        opacity var(--vc-channeltabs-fade),
+        transform var(--vc-channeltabs-move);
 }
 
 .vc-channeltabs-tab-compact:hover .vc-channeltabs-name-text,
@@ -323,18 +343,37 @@
 .vc-channeltabs-tab-selected,
 .vc-channeltabs-group-selected {
     background-color: color-mix(in srgb, var(--vc-channeltabs-guild, transparent) 26%, var(--background-base-low));
-    background-image: linear-gradient(var(--main-color, var(--brand-experiment, var(--brand-500))), var(--main-color, var(--brand-experiment, var(--brand-500))));
+    background-image: linear-gradient(var(--vc-channeltabs-accent), var(--vc-channeltabs-accent));
     background-position: bottom center;
     background-repeat: no-repeat;
     background-size: calc(100% - 16px) 2px;
-    border: 1px solid var(--main-color, var(--brand-experiment, var(--brand-500)));
-    box-shadow: var(--elevation-low);
+    border: 1px solid var(--background-mod-muted);
+}
+
+.vc-channeltabs-tab:not(.vc-channeltabs-tab-selected) .vc-channeltabs-name-text {
+    color: var(--text-muted);
+}
+
+.vc-channeltabs-tab.vc-channeltabs-tab-unread .vc-channeltabs-name-text {
+    color: var(--interactive-active);
+}
+
+.vc-channeltabs-tab:not(.vc-channeltabs-tab-selected, .vc-channeltabs-tab-unread):hover .vc-channeltabs-name-text {
+    color: var(--text-default);
 }
 
 /* stylelint-disable-next-line no-descending-specificity */
 .vc-channeltabs-tab-selected .vc-channeltabs-name-text,
 .vc-channeltabs-tab-selected .vc-channeltabs-guild-acronym-icon span {
     color: var(--interactive-active);
+}
+
+.vc-channeltabs-tab-muted .vc-channeltabs-tab-inner > * {
+    transition: opacity var(--vc-channeltabs-fade), color var(--vc-channeltabs-fade);
+}
+
+.vc-channeltabs-tab-muted:not(.vc-channeltabs-tab-selected, :hover) .vc-channeltabs-tab-inner > :not(.vc-channeltabs-notification-badge) {
+    opacity: 0.5;
 }
 
 .vc-channeltabs-tab-container svg {
@@ -355,8 +394,8 @@
 }
 
 .vc-channeltabs-notification-badge {
-    background-color: var(--main-color, var(--brand-experiment, var(--brand-500))) !important;
-    color: var(--channeltabs-white);
+    background-color: var(--vc-channeltabs-accent) !important;
+    color: oklch(from var(--vc-channeltabs-accent) clamp(0, (0.7 - l) * 1000, 1) 0 0deg) !important;
     border-radius: 8px;
     min-width: 16px;
     height: 16px;
@@ -372,6 +411,7 @@
 
 .vc-channeltabs-notification-badge[data-has-mention="true"] {
     background-color: var(--status-danger) !important;
+    color: var(--channeltabs-white) !important;
 }
 
 .vc-channeltabs-ghost-tab {
@@ -381,6 +421,9 @@
 .vc-channeltabs-hoverable:hover,
 .vc-channeltabs-tab:hover:not(.vc-channeltabs-tab-selected) {
     background-color: color-mix(in srgb, var(--vc-channeltabs-guild, transparent) 22%, var(--background-mod-normal));
+}
+
+.vc-channeltabs-tab:hover:not(.vc-channeltabs-tab-selected) {
     border-color: var(--hover-color, var(--border-subtle));
 }
 
@@ -412,7 +455,7 @@
     opacity: 0;
     pointer-events: none;
     transform: translate(8px, -50%);
-    transition: opacity 0.15s ease, transform 0.15s ease;
+    transition: opacity var(--vc-channeltabs-fade), transform var(--vc-channeltabs-move);
 }
 
 .vc-channeltabs-bookmark-search-shell-open .vc-channeltabs-bookmark-search-field,
@@ -444,7 +487,7 @@
 }
 
 .vc-channeltabs-match {
-    background-color: color-mix(in srgb, var(--main-color, var(--brand-experiment, var(--brand-500))) 35%, transparent);
+    background-color: color-mix(in srgb, var(--vc-channeltabs-accent) 35%, transparent);
     color: inherit;
 }
 
@@ -455,13 +498,13 @@
     justify-content: center;
     width: 28px;
     height: 28px;
-    border-radius: 6px;
+    border-radius: var(--vc-channeltabs-radius-small);
     position: absolute;
     right: 0;
     top: 0;
     flex-shrink: 0;
     color: var(--text-muted);
-    transition: color 0.15s ease;
+    transition: color var(--vc-channeltabs-fade);
 }
 
 .vc-channeltabs-bookmark-search-button:hover,
@@ -472,9 +515,9 @@
 .vc-channeltabs-new-button {
     padding: 4px;
     margin: 0 4px;
-    border-radius: 6px;
-    background-color: var(--background-base-low);
-    transition: background-color 0.15s ease;
+    border-radius: var(--vc-channeltabs-radius-small);
+    background-color: transparent;
+    transition: background-color var(--vc-channeltabs-fade);
     flex-shrink: 0;
 }
 
@@ -488,18 +531,23 @@
 }
 
 .vc-channeltabs-close-button {
+    position: absolute;
+    right: 6px;
     display: grid;
-    flex-shrink: 0;
     place-items: center;
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
     padding: 0;
-    margin: 0 0 0 4px;
-    border-radius: 6px;
+    border-radius: var(--vc-channeltabs-radius-small);
     color: var(--text-muted);
     transition:
-        color 0.15s ease,
-        background-color 0.15s ease;
+        color var(--vc-channeltabs-fade),
+        background-color var(--vc-channeltabs-fade),
+        opacity var(--vc-channeltabs-fade);
+}
+
+.vc-channeltabs-tab-closable:is(.vc-channeltabs-tab-selected, :hover):not(.vc-channeltabs-tab-compact, .vc-channeltabs-tab-pinned) .vc-channeltabs-channel-info {
+    mask-image: linear-gradient(to left, transparent 24px, #000 36px);
 }
 
 .vc-channeltabs-close-button:hover {
@@ -514,21 +562,23 @@
     background-color: var(--background-mod-strong);
 }
 
-.vc-channeltabs-close-button-compact {
-    position: absolute;
+.vc-channeltabs-tab:not(.vc-channeltabs-tab-selected, :hover) .vc-channeltabs-close-button {
     opacity: 0;
-    width: 24px;
-    height: 24px;
-    margin-left: 0.35rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 6px;
+    pointer-events: none;
+}
+
+.vc-channeltabs-tab .vc-channeltabs-close-button:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.vc-channeltabs-close-button-compact {
+    right: 4px;
+    opacity: 0;
     transform: translateX(-4px);
     transition:
-        opacity 0.2s ease-out 0.1s,
-        transform 0.2s ease-out 0.1s;
-    right: 4px;
+        opacity var(--vc-channeltabs-fade) 0.1s,
+        transform var(--vc-channeltabs-move) 0.1s;
 }
 
 .vc-channeltabs-tab-compact:hover .vc-channeltabs-close-button-compact,
@@ -544,7 +594,7 @@
     width: calc(12rem * var(--tab-width-scale, 1));
     padding: 0.125rem 0;
     min-width: 0;
-    border-radius: 6px;
+    border-radius: var(--vc-channeltabs-radius-small);
     border: 1px solid var(--input-border-default, var(--input-border));
 }
 
@@ -576,257 +626,63 @@
     -webkit-app-region: no-drag;
 }
 
-/* Red glow effect for tabs with mentions */
 /* stylelint-disable-next-line no-descending-specificity */
 .vc-channeltabs-tab.vc-channeltabs-tab-mention {
-    box-shadow: 0 0 8px color-mix(in srgb, var(--danger-color, rgb(242 63 66)) 60%, transparent), 0 0 16px color-mix(in srgb, var(--danger-color, rgb(242 63 66)) 30%, transparent);
-}
-
-/* the glow marks the tab on its own; it only pulses while you are on it, so an
-   unread mention does not repaint the tab bar for as long as it sits there */
-.vc-channeltabs-tab.vc-channeltabs-tab-mention:hover {
-    animation: vc-channeltabs-mention-pulse 2s ease-in-out infinite;
-}
-
-@keyframes vc-channeltabs-mention-pulse {
-
-    /* stylelint-disable-next-line rule-empty-line-before */
-    0%,
-    100% {
-        box-shadow: 0 0 8px color-mix(in srgb, var(--danger-color, rgb(242 63 66)) 60%, transparent), 0 0 16px color-mix(in srgb, var(--danger-color, rgb(242 63 66)) 30%, transparent);
-    }
-
-    50% {
-        box-shadow: 0 0 12px color-mix(in srgb, var(--danger-color, rgb(242 63 66)) 80%, transparent), 0 0 24px color-mix(in srgb, var(--danger-color, rgb(242 63 66)) 50%, transparent);
-    }
-}
-
-/* Enhance glow for selected tabs with mentions */
-.vc-channeltabs-tab-selected.vc-channeltabs-tab-mention {
-    box-shadow:
-        var(--elevation-low),
-        0 0 12px color-mix(in srgb, var(--danger-color, rgb(242 63 66)) 80%, transparent),
-        0 0 24px color-mix(in srgb, var(--danger-color, rgb(242 63 66)) 50%, transparent);
-}
-
-/* Pink Nitro glow effect (easter egg) */
-.vc-channeltabs-tab-nitro {
-    box-shadow: 0 0 10px color-mix(in srgb, var(--channeltabs-pink) 70%, transparent), 0 0 20px color-mix(in srgb, var(--channeltabs-pink) 40%, transparent);
-}
-
-.vc-channeltabs-tab-nitro:hover {
-    animation: vc-channeltabs-nitro-pulse 3s ease-in-out infinite;
-}
-
-@keyframes vc-channeltabs-nitro-pulse {
-
-    /* stylelint-disable-next-line rule-empty-line-before */
-    0%,
-    100% {
-        box-shadow: 0 0 10px color-mix(in srgb, var(--channeltabs-pink) 70%, transparent), 0 0 20px color-mix(in srgb, var(--channeltabs-pink) 40%, transparent);
-    }
-
-    50% {
-        box-shadow: 0 0 16px color-mix(in srgb, var(--channeltabs-pink) 90%, transparent), 0 0 32px color-mix(in srgb, var(--channeltabs-pink) 60%, transparent);
-    }
-}
-
-/* Enhanced Nitro glow for selected tab */
-.vc-channeltabs-tab-selected.vc-channeltabs-tab-nitro {
-    box-shadow:
-        var(--elevation-low),
-        0 0 16px color-mix(in srgb, var(--channeltabs-pink) 90%, transparent),
-        0 0 32px color-mix(in srgb, var(--channeltabs-pink) 60%, transparent);
-}
-
-/* Nitro icon gradient animation */
-.vc-channeltabs-tab-nitro .vc-channeltabs-tab-inner svg {
-    filter: drop-shadow(0 0 2px color-mix(in srgb, var(--channeltabs-pink) 80%, transparent));
+    outline: 1px solid color-mix(in srgb, var(--status-danger) 75%, transparent);
+    outline-offset: -1px;
 }
 
 .vc-channeltabs-tab-nitro .vc-channeltabs-tab-inner svg path {
     fill: var(--channeltabs-pink) !important;
 }
 
-.vc-channeltabs-tab-nitro:hover .vc-channeltabs-tab-inner svg path {
-    animation: vc-channeltabs-nitro-icon-gradient 3s ease-in-out infinite;
-}
-
-@keyframes vc-channeltabs-nitro-icon-gradient {
-
-    /* stylelint-disable-next-line rule-empty-line-before */
-    0%,
-    100% {
-        fill: var(--channeltabs-pink);
-    }
-
-    50% {
-        fill: color-mix(in srgb, var(--channeltabs-pink) 60%, var(--interactive-active));
-    }
-}
-
-/* quests active gradient when quests are running */
 .vc-channeltabs-tab-quests-active {
-    position: relative;
-    overflow: visible;
+    outline: 1px solid color-mix(in srgb, var(--vc-channeltabs-accent) 70%, transparent);
+    outline-offset: -1px;
 }
 
-.vc-channeltabs-tab-quests-active::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: 9px;
-    background: linear-gradient(135deg,
-            transparent,
-            transparent 25%,
-            color-mix(in srgb, var(--brand-500) 70%, var(--interactive-active)) 40%,
-            var(--brand-500) 50%,
-            var(--brand-560, var(--brand-500)) 60%,
-            transparent 75%,
-            transparent);
-    background-size: 300% 300%;
-    opacity: 0;
-    filter: blur(2px);
-    pointer-events: none;
-}
-
-/* the sweep is invisible for most of its cycle anyway, so it rests at nothing */
-.vc-channeltabs-tab-quests-active:hover::before {
-    animation: vc-channeltabs-quests-diagonal 5s linear infinite;
-}
-
-.vc-channeltabs-tab-quests-active::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: 9px;
-    box-shadow: 0 0 8px 1px color-mix(in srgb, var(--brand-500) 60%, transparent);
-    pointer-events: none;
-}
-
-.vc-channeltabs-tab-quests-active:hover::after {
-    animation: vc-channeltabs-quests-glow 3s ease-in-out infinite;
-}
-
-@keyframes vc-channeltabs-quests-diagonal {
-
-    /* stylelint-disable-next-line rule-empty-line-before */
-    0%,
-    40% {
-        background-position: 100% 0;
-        opacity: 0;
-    }
-
-    50% {
-        opacity: 0.8;
-    }
-
-    60%,
-    100% {
-        background-position: 0 100%;
-        opacity: 0;
-    }
-}
-
-@keyframes vc-channeltabs-quests-glow {
-    0%,
-    100% {
-        box-shadow: 0 0 8px 1px color-mix(in srgb, var(--brand-500) 45%, transparent);
-    }
-
-    50% {
-        box-shadow: 0 0 8px 1px color-mix(in srgb, var(--brand-500) 75%, transparent);
-    }
-}
-
-/* Enhanced gradient for selected Quests tab with active quests */
-.vc-channeltabs-tab-selected.vc-channeltabs-tab-quests-active::before {
-    filter: blur(3px);
-}
-
-.vc-channeltabs-tab-selected.vc-channeltabs-tab-quests-active::after {
-    box-shadow: 0 0 12px 2px color-mix(in srgb, var(--brand-500) 80%, transparent);
-}
-
-.vc-channeltabs-tab-selected.vc-channeltabs-tab-quests-active:hover::after {
-    animation: vc-channeltabs-quests-glow-selected 3s ease-in-out infinite;
-}
-
-@keyframes vc-channeltabs-quests-glow-selected {
-    0%,
-    100% {
-        box-shadow: 0 0 12px 2px color-mix(in srgb, var(--brand-500) 65%, transparent);
-    }
-
-    50% {
-        box-shadow: 0 0 12px 2px color-mix(in srgb, var(--brand-500) 90%, transparent);
-    }
-}
-
-/* Disable Quests active animations when setting is off */
-.vc-channeltabs-container.vc-channeltabs-no-quests-active-animation .vc-channeltabs-tab-quests-active::before,
-.vc-channeltabs-container.vc-channeltabs-no-quests-active-animation .vc-channeltabs-tab-quests-active::after {
-    animation: none !important;
-    opacity: 0 !important;
+.vc-channeltabs-container.vc-channeltabs-no-quests-active-animation .vc-channeltabs-tab-quests-active {
+    outline: none;
 }
 
 /* Tab closing animation */
 @keyframes vc-channeltabs-tab-close {
-    0% {
-        opacity: 1;
-        transform: none;
-    }
-
-    100% {
+    to {
+        width: 0;
+        min-width: 0;
+        margin-inline: 0;
+        padding-inline: 0;
+        border-inline-width: 0;
         opacity: 0;
-        transform: scale(0.95) translateY(4px);
     }
 }
 
 .vc-channeltabs-tab-closing {
-    animation: vc-channeltabs-tab-close 0.2s ease-in-out forwards;
+    animation: vc-channeltabs-tab-close var(--vc-channeltabs-fade) forwards;
     pointer-events: none;
     overflow: hidden;
+    interpolate-size: allow-keywords;
 }
 
-/* New tab slide-in animation */
 @keyframes vc-channeltabs-tab-enter {
-    0% {
+    from {
         opacity: 0;
-        transform: scale(0.8) translateX(-20px);
-    }
-
-    60% {
-        transform: scale(1.05) translateX(0);
-    }
-
-    100% {
-        opacity: 1;
-        transform: scale(1) translateX(0);
+        transform: translateY(var(--vc-channeltabs-enter-y, 4px));
     }
 }
 
 .vc-channeltabs-tab-entering {
-    animation: vc-channeltabs-tab-enter 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    animation: vc-channeltabs-tab-enter var(--vc-channeltabs-move);
 }
 
-/* Icon scale on selection */
 .vc-channeltabs-tab-selected .vc-channeltabs-icon,
 .vc-channeltabs-tab-selected .vc-channeltabs-guild-acronym-icon {
-    animation: vc-channeltabs-icon-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    animation: vc-channeltabs-icon-pop var(--vc-channeltabs-move);
 }
 
 @keyframes vc-channeltabs-icon-pop {
-    0% {
-        transform: scale(1);
-    }
-
     50% {
-        transform: scale(1.15);
-    }
-
-    100% {
-        transform: scale(1);
+        transform: scale(1.08);
     }
 }
 
@@ -840,7 +696,7 @@
 
 /* Disable tab transitions when any tab is being dragged for smoother reordering */
 .vc-channeltabs-tab-container.vc-channeltabs-tab-container-dragging .vc-channeltabs-tab:not(.vc-channeltabs-tab-dragging) {
-    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.2s ease, box-shadow 0.2s ease;
+    transition: transform var(--vc-channeltabs-move), opacity var(--vc-channeltabs-fade);
 }
 
 .vc-channeltabs-tab-drop-target {
@@ -850,12 +706,12 @@
 .vc-channeltabs-tab-drop-target::before {
     content: '';
     position: absolute;
-    left: -4px;
-    top: 0;
-    bottom: 0;
-    width: 3px;
-    background: var(--main-color, var(--brand-experiment, var(--brand-500)));
-    border-radius: 2px;
+    left: -6px;
+    top: 4px;
+    bottom: 4px;
+    width: 2px;
+    background: var(--vc-channeltabs-accent);
+    border-radius: 1px;
 }
 
 /* animation override settings */
@@ -874,7 +730,7 @@
 .vc-channeltabs-container.vc-channeltabs-no-drag-animation .vc-channeltabs-tab-drop-target {
     transform: none !important;
     background-color: transparent !important;
-    border-color: var(--background-mod-muted) !important;
+    border-color: transparent !important;
     box-shadow: none !important;
 }
 
@@ -891,9 +747,10 @@
 }
 
 .vc-channeltabs-container.vc-channeltabs-no-enter-exit-animation .vc-channeltabs-tab {
-    transition: opacity 0.2s ease-out,
-        transform 0.2s ease-in-out,
-        background-color 0.15s ease !important;
+    transition:
+        opacity var(--vc-channeltabs-fade),
+        transform var(--vc-channeltabs-move),
+        background-color var(--vc-channeltabs-fade) !important;
 }
 
 /* Icon pop animation - disable if setting is off */
@@ -904,7 +761,6 @@
 
 /* Selected tab border - disable if setting is off */
 .vc-channeltabs-container.vc-channeltabs-no-selected-border .vc-channeltabs-tab-selected {
-    border: 1px solid var(--background-mod-muted) !important;
     background-image: none !important;
 }
 
@@ -922,8 +778,7 @@
 
 /* Mention glow - disable if setting is off */
 .vc-channeltabs-container.vc-channeltabs-no-mention-glow .vc-channeltabs-tab.vc-channeltabs-tab-mention {
-    animation: none !important;
-    box-shadow: var(--elevation-low) !important;
+    outline: none;
 }
 
 /* Compact mode expansion animation - disable if setting is off */
@@ -1000,9 +855,9 @@
 
 /* Drag and drop visual feedback */
 .vc-channeltabs-bookmarks-drop-target {
-    background-color: color-mix(in srgb, var(--main-color, var(--brand-experiment, var(--brand-500))) 15%, transparent);
-    border: 1px dashed color-mix(in srgb, var(--main-color, var(--brand-experiment, var(--brand-500))) 65%, transparent);
-    border-radius: 6px;
+    background-color: color-mix(in srgb, var(--vc-channeltabs-accent) 15%, transparent);
+    border: 1px dashed color-mix(in srgb, var(--vc-channeltabs-accent) 65%, transparent);
+    border-radius: var(--vc-channeltabs-radius-small);
 }
 
 .vc-channeltabs-bookmark.vc-channeltabs-bookmark-dragging {
@@ -1010,8 +865,8 @@
 }
 
 .vc-channeltabs-bookmark.vc-channeltabs-bookmark-drop-target {
-    border-color: color-mix(in srgb, var(--main-color, var(--brand-experiment, var(--brand-500))) 70%, var(--border-subtle));
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--main-color, var(--brand-experiment, var(--brand-500))) 35%, transparent);
+    border-color: color-mix(in srgb, var(--vc-channeltabs-accent) 70%, var(--border-subtle));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vc-channeltabs-accent) 35%, transparent);
 }
 
 .vc-channeltabs-bookmark.vc-channeltabs-bookmark-drop-before::before,
@@ -1022,7 +877,7 @@
     bottom: 3px;
     width: 2px;
     border-radius: 2px;
-    background-color: var(--main-color, var(--brand-experiment, var(--brand-500)));
+    background-color: var(--vc-channeltabs-accent);
 }
 
 .vc-channeltabs-bookmark.vc-channeltabs-bookmark-drop-before::before {
@@ -1034,8 +889,8 @@
 }
 
 .vc-channeltabs-bookmark.vc-channeltabs-folder-drop-target {
-    background-color: color-mix(in srgb, var(--main-color, var(--brand-experiment, var(--brand-500))) 22%, transparent);
-    border-color: color-mix(in srgb, var(--main-color, var(--brand-experiment, var(--brand-500))) 80%, var(--border-subtle));
+    background-color: color-mix(in srgb, var(--vc-channeltabs-accent) 22%, transparent);
+    border-color: color-mix(in srgb, var(--vc-channeltabs-accent) 80%, var(--border-subtle));
 }
 
 .vc-channeltabs-bookmark.vc-channeltabs-folder-expanded {
@@ -1052,8 +907,11 @@
 }
 
 .vc-channeltabs-bookmark.vc-channeltabs-bookmark-active {
-    border-color: var(--main-color, var(--brand-experiment, var(--brand-500)));
-    background-color: color-mix(in srgb, var(--main-color, var(--brand-experiment, var(--brand-500))) 15%, transparent);
+    background-color: var(--background-mod-subtle);
+    background-image: linear-gradient(var(--vc-channeltabs-accent), var(--vc-channeltabs-accent));
+    background-position: bottom center;
+    background-repeat: no-repeat;
+    background-size: calc(100% - 12px) 2px;
 }
 
 /* keybind Settings Styles */
@@ -1071,8 +929,8 @@
     justify-content: space-between;
     gap: 16px;
     padding: 12px;
-    background-color: var(--background-secondary-alt);
-    border-radius: 10px;
+    background-color: var(--background-mod-subtle);
+    border-radius: var(--vc-channeltabs-radius);
 }
 
 .channelTabs-keybind-info {
@@ -1093,7 +951,7 @@
     padding: 8px 16px;
     background-color: var(--background-base-low);
     border: 2px solid var(--input-border-default, var(--input-border));
-    border-radius: 6px;
+    border-radius: var(--vc-channeltabs-radius-small);
     cursor: pointer;
     min-width: 140px;
     text-align: center;
@@ -1101,19 +959,18 @@
     font-weight: 600;
     color: var(--text-strong);
     transition:
-        background-color 0.2s ease,
-        border-color 0.2s ease,
-        color 0.2s ease,
-        box-shadow 0.2s ease,
-        transform 0.2s ease,
-        opacity 0.2s ease;
+        background-color var(--vc-channeltabs-fade),
+        border-color var(--vc-channeltabs-fade),
+        color var(--vc-channeltabs-fade),
+        box-shadow var(--vc-channeltabs-fade),
+        opacity var(--vc-channeltabs-fade);
     outline: none;
     box-shadow: 0 0 0 1px var(--background-mod-muted);
 }
 
 .channelTabs-keybind-button:hover:not(:disabled) {
     background-color: var(--background-mod-subtle);
-    border-color: var(--hover-color, var(--main-color, var(--brand-experiment, var(--brand-500))));
+    border-color: var(--hover-color, var(--vc-channeltabs-accent));
     box-shadow: var(--elevation-medium, var(--elevation-low));
 }
 
@@ -1127,26 +984,8 @@
 }
 
 .channelTabs-keybind-button.listening {
-    background: linear-gradient(135deg, var(--main-color, var(--brand-experiment, var(--brand-500))) 0%, var(--brand-experiment-560) 100%);
-    color: var(--white);
-    border-color: var(--main-color, var(--brand-experiment, var(--brand-500)));
-    animation: keybind-pulse 1.5s ease-in-out infinite;
-    box-shadow: 0 0 12px var(--main-color, var(--brand-experiment, var(--brand-500)));
-}
-
-@keyframes keybind-pulse {
-
-    /* stylelint-disable-next-line rule-empty-line-before */
-    0%,
-    100% {
-        opacity: 1;
-        transform: scale(1);
-    }
-
-    50% {
-        opacity: 0.85;
-        transform: scale(1.02);
-    }
+    background-color: color-mix(in srgb, var(--vc-channeltabs-accent) 15%, var(--background-base-low));
+    border-color: var(--vc-channeltabs-accent);
 }
 
 .channelTabs-keybind-conflict {
@@ -1154,7 +993,7 @@
     font-size: 12px;
     font-weight: 500;
     margin-top: 2px;
-    animation: shake 0.3s ease;
+    animation: shake var(--vc-channeltabs-move);
 }
 
 @keyframes shake {
@@ -1190,36 +1029,17 @@
     justify-content: center;
     padding: 0;
     transition:
-        opacity 0.2s ease-out,
-        transform 0.2s ease-out;
+        opacity var(--vc-channeltabs-fade),
+        transform var(--vc-channeltabs-move);
     flex-shrink: 0;
     overflow: hidden;
 }
 
-/* position: Left */
-.vc-channeltabs-tab-number-badge[data-position="left"] {
-    margin-right: 0.5rem;
-}
-
-/* position: Right */
-.vc-channeltabs-tab-number-badge[data-position="right"] {
-    margin-left: 0.5rem;
-}
-
 /* directional slide animations for compact mode */
-.vc-channeltabs-tab-compact:not(:hover, .vc-channeltabs-tab-selected) .vc-channeltabs-tab-number-badge[data-position="right"] {
+.vc-channeltabs-tab-compact:not(:hover, .vc-channeltabs-tab-selected) .vc-channeltabs-tab-number-badge {
     opacity: 0;
     transform: translateX(-6px) scale(0.95);
     max-width: 0;
-    margin-left: 0;
-    pointer-events: none;
-}
-
-.vc-channeltabs-tab-compact:not(:hover, .vc-channeltabs-tab-selected) .vc-channeltabs-tab-number-badge[data-position="left"] {
-    opacity: 0;
-    transform: translateX(-6px) scale(0.95);
-    max-width: 0;
-    margin-right: 0;
     pointer-events: none;
 }
 
@@ -1257,7 +1077,6 @@
 }
 
 .vc-channeltabs-tab-pinned .vc-channeltabs-tab-inner {
-    padding-right: 0;
     justify-content: center;
 }
 
@@ -1266,7 +1085,8 @@
    bottom edge and drops a shadow downwards. against the bottom of the window all three
    point the wrong way. */
 .vc-channeltabs-container:not(.vc-channeltabs-container-top) .vc-channeltabs-tab-selected,
-.vc-channeltabs-container:not(.vc-channeltabs-container-top) .vc-channeltabs-group-selected {
+.vc-channeltabs-container:not(.vc-channeltabs-container-top) .vc-channeltabs-group-selected,
+.vc-channeltabs-container:not(.vc-channeltabs-container-top) .vc-channeltabs-bookmark-active {
     background-position: top center;
 }
 
@@ -1286,11 +1106,13 @@
     border-radius: inherit;
     background-color: inherit;
     opacity: 0;
+    visibility: hidden;
     transform: translateY(8px);
     pointer-events: none;
     transition:
-        transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-        opacity 0.15s ease;
+        transform var(--vc-channeltabs-move),
+        opacity var(--vc-channeltabs-fade),
+        visibility 0s linear 0.2s;
 }
 
 .vc-channeltabs-container-top.vc-channeltabs-container-autohide .vc-channeltabs-tab-container {
@@ -1302,8 +1124,10 @@
 .vc-channeltabs-container-autohide:hover .vc-channeltabs-tab-container,
 .vc-channeltabs-container-revealed .vc-channeltabs-tab-container {
     opacity: 1;
+    visibility: visible;
     transform: none;
     pointer-events: auto;
+    transition-delay: 0.15s;
 }
 
 .vc-channeltabs-group {
@@ -1313,14 +1137,14 @@
     align-items: center;
     margin: 0 4px;
     padding: 2px;
-    border: 1px solid var(--background-mod-muted);
-    border-radius: 10px;
+    border: 1px solid transparent;
+    border-radius: var(--vc-channeltabs-radius);
     background-color: var(--background-mod-subtle);
-    transition: border-color 0.15s ease;
+    transition: border-color var(--vc-channeltabs-fade);
 }
 
-.vc-channeltabs-group.vc-channeltabs-group-selected {
-    border-color: var(--main-color, var(--brand-experiment, var(--brand-500)));
+.vc-channeltabs-group .vc-channeltabs-tab {
+    border-radius: var(--vc-channeltabs-radius-small);
 }
 
 .vc-channeltabs-group-head {
@@ -1334,11 +1158,11 @@
     display: flex;
     align-items: center;
     padding: 4px;
-    border-radius: 6px;
+    border-radius: var(--vc-channeltabs-radius-small);
 }
 
 .vc-channeltabs-group-chevron-icon {
-    transition: transform 0.2s ease;
+    transition: transform var(--vc-channeltabs-move);
 }
 
 .vc-channeltabs-group-expanded .vc-channeltabs-group-chevron-icon {
@@ -1359,7 +1183,7 @@
 .vc-channeltabs-group-count {
     flex-shrink: 0;
     padding: 0 6px;
-    border-radius: 6px;
+    border-radius: var(--vc-channeltabs-radius-small);
     background-color: var(--background-mod-subtle);
     color: var(--text-muted);
     font-size: 11px;
@@ -1389,7 +1213,7 @@
     min-width: 0;
     overflow: hidden;
     opacity: 0;
-    transition: opacity 0.15s ease;
+    transition: opacity var(--vc-channeltabs-fade);
 }
 
 .vc-channeltabs-group-expanded .vc-channeltabs-group-members-inner {
@@ -1398,8 +1222,8 @@
 
 .vc-channeltabs-tab-group-target,
 .vc-channeltabs-group-drop-target {
-    border-color: var(--main-color, var(--brand-experiment, var(--brand-500)));
-    box-shadow: inset 0 0 0 1px var(--main-color, var(--brand-experiment, var(--brand-500)));
+    border-color: var(--vc-channeltabs-accent);
+    box-shadow: inset 0 0 0 1px var(--vc-channeltabs-accent);
 }
 
 .vc-channeltabs-container.vc-channeltabs-no-group-expand-animation .vc-channeltabs-group-members-inner,
@@ -1409,9 +1233,8 @@
 
 .vc-channeltabs-group-label:hover {
     background-color: var(--background-mod-normal);
-    border-radius: 10px;
+    border-radius: var(--vc-channeltabs-radius-small);
 }
-
 
 .vc-channeltabs-group-flyout {
     position: fixed;
@@ -1423,7 +1246,7 @@
     max-height: 60vh;
     padding: 4px;
     border: 1px solid var(--background-mod-muted);
-    border-radius: 10px;
+    border-radius: var(--vc-channeltabs-radius);
     background-color: var(--background-floating);
     box-shadow: var(--elevation-high);
     overflow-y: auto;
@@ -1436,16 +1259,16 @@
     justify-content: space-between;
     gap: 0.5rem;
     padding: 5px 8px;
-    border-radius: 6px;
+    border-radius: var(--vc-channeltabs-radius-small);
     text-align: left;
 }
 
 .vc-channeltabs-group-flyout-item:hover {
-    background-color: var(--background-secondary-alt);
+    background-color: var(--background-mod-normal);
 }
 
 .vc-channeltabs-group-flyout-item-selected {
-    background-color: var(--background-base-low);
+    background-color: var(--background-mod-strong);
 }
 
 .vc-channeltabs-button:focus-visible,
@@ -1456,4 +1279,144 @@
 .channelTabs-keybind-button:focus-visible {
     outline: 2px solid var(--focus-primary);
     outline-offset: -2px;
+}
+
+.vc-channeltabs-tab.vc-channeltabs-tab-search-focused {
+    outline: 2px solid var(--focus-primary);
+    outline-offset: -2px;
+}
+
+.vc-channeltabs-tab-pinned + :is(.vc-channeltabs-tab, .vc-channeltabs-group):not(.vc-channeltabs-tab-pinned) {
+    margin-left: 12px;
+}
+
+.vc-channeltabs-thread-parent,
+.vc-channeltabs-draft-mark {
+    flex-shrink: 0;
+    color: var(--text-muted);
+}
+
+.vc-channeltabs-voice-avatars {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+}
+
+.vc-channeltabs-voice-avatar {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+}
+
+.vc-channeltabs-voice-avatar + .vc-channeltabs-voice-avatar {
+    margin-left: -4px;
+    mask-image: radial-gradient(circle at -4px 50%, transparent 10px, #000 10.5px);
+}
+
+.vc-channeltabs-voice-more {
+    margin-left: 4px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.vc-channeltabs-tooltip {
+    max-width: 320px;
+}
+
+.vc-channeltabs-tooltip-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    text-align: left;
+}
+
+.vc-channeltabs-tooltip-title,
+.vc-channeltabs-tooltip-author {
+    font-weight: 600;
+}
+
+.vc-channeltabs-tooltip-meta {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.vc-channeltabs-tooltip-line {
+    overflow: hidden;
+    font-size: 12px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.vc-channeltabs-bar-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    margin-right: 4px;
+    flex-shrink: 0;
+    border-radius: var(--vc-channeltabs-radius-small);
+    color: var(--text-muted);
+    transition: color var(--vc-channeltabs-fade), background-color var(--vc-channeltabs-fade);
+}
+
+.vc-channeltabs-bar-button:hover {
+    color: var(--interactive-icon-hover);
+}
+
+.vc-channeltabs-bar-button-active {
+    color: var(--interactive-active);
+    background-color: var(--background-mod-subtle);
+}
+
+.vc-channeltabs-group-colored {
+    background-color: color-mix(in srgb, var(--vc-channeltabs-group-color) 18%, transparent);
+}
+
+.vc-channeltabs-group-colored .vc-channeltabs-tab {
+    --vc-channeltabs-guild: var(--vc-channeltabs-group-color) !important;
+}
+
+.vc-channeltabs-undo {
+    position: absolute;
+    right: 8px;
+    bottom: calc(100% + 6px);
+    z-index: 103;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 320px;
+    padding: 6px 10px;
+    border-radius: var(--vc-channeltabs-radius);
+    background-color: var(--background-floating);
+    box-shadow: var(--elevation-high);
+    font-size: 14px;
+    transition: transform var(--vc-channeltabs-move);
+}
+
+.vc-channeltabs-container-top .vc-channeltabs-undo {
+    top: calc(100% + 6px);
+    bottom: auto;
+}
+
+.vc-channeltabs-container-autohide:is(:hover, .vc-channeltabs-container-revealed) .vc-channeltabs-undo {
+    transform: translateY(calc(-44px * var(--tab-height-scale, 1)));
+    transition-delay: 0.15s;
+}
+
+.vc-channeltabs-container-top.vc-channeltabs-container-autohide:is(:hover, .vc-channeltabs-container-revealed) .vc-channeltabs-undo {
+    transform: translateY(calc(44px * var(--tab-height-scale, 1)));
+}
+
+.vc-channeltabs-undo-name {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.vc-channeltabs-undo-action {
+    flex-shrink: 0;
+    color: var(--text-link);
+    font-weight: 600;
 }

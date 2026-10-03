@@ -20,6 +20,26 @@ import * as ChannelTabsUtils from "./util";
 import { BasicChannelTabsProps, createTab, handleChannelSwitch, settings } from "./util";
 import { clearTabState, useScrollManager } from "./util/scroll";
 
+const CHANNEL_LINK = /^\/channels\/(@me|\d+)\/(\d+)$/;
+
+function channelLink(e: MouseEvent) {
+    if (e.button !== 1 || !(e.target instanceof Element)) return;
+    return CHANNEL_LINK.exec(e.target.closest("a")?.getAttribute("href") ?? "") ?? undefined;
+}
+
+function preventAutoscroll(e: MouseEvent) {
+    if (channelLink(e)) e.preventDefault();
+}
+
+function openLinkInTab(e: MouseEvent) {
+    const link = channelLink(e);
+    if (!link) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    createTab({ guildId: link[1], channelId: link[2] }, false, undefined, true, true);
+}
+
 const contextMenuPatch: NavContextMenuPatchCallback = (children, props: { channel: Channel, messageId?: string; }) => {
     const { channel, messageId } = props;
 
@@ -116,9 +136,14 @@ export default definePlugin({
 
     stop() {
         clearTabState();
+        document.removeEventListener("mousedown", preventAutoscroll, true);
+        document.removeEventListener("auxclick", openLinkInTab, true);
     },
 
     start() {
+        document.addEventListener("mousedown", preventAutoscroll, true);
+        document.addEventListener("auxclick", openLinkInTab, true);
+
         // migrate old settings to new granular keybind settings
         const store = settings.store as any;
         if (store.enableHotkeys !== undefined) {

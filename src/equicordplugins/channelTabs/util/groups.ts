@@ -179,6 +179,15 @@ export function renameGroup(groupId: string, name: string) {
     triggerTabsUpdate();
 }
 
+export function setGroupColor(groupId: string, color?: string) {
+    const group = getGroup(groupId);
+    if (!group) return;
+
+    if (color) group.color = color;
+    else delete group.color;
+    triggerTabsUpdate();
+}
+
 export function normalizeContiguity(tabId: number) {
     const tab = openedTabs.find(t => t.id === tabId);
     if (!tab) return;
