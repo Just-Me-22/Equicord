@@ -10,10 +10,14 @@ import { EquicordDevs } from "@utils/constants";
 import { Logger } from "@utils/Logger";
 import { pluralize } from "@utils/misc";
 import definePlugin, { OptionType } from "@utils/types";
-import { Message, MessageAttachment } from "@vencord/discord-types";
+import { Message } from "@vencord/discord-types";
 import { ChannelStore, showToast, Toasts } from "@webpack/common";
 
+import { hasMedia, itemsOf } from "./media";
+
 const logger = new Logger("DownloadAllAttachments");
+
+const EXTENSIONS: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/gif": "gif", "image/webp": "webp", "video/mp4": "mp4", "video/webm": "webm" };
 
 const settings = definePluginSettings({
     downloadAllFileTypes: {
@@ -23,7 +27,9 @@ const settings = definePluginSettings({
     }
 });
 
-async function downloadAll(attachments: MessageAttachment[]) {
+async function downloadAll(message: Message) {
+    const items = await itemsOf(message, settings.store.downloadAllFileTypes);
+    showToast(`Downloading ${pluralize(items.length, "file")}...`, Toasts.Type.MESSAGE);
     const usedNames = new Map<string, number>();
 
     function uniqueName(original: string): string {
@@ -36,49 +42,37 @@ async function downloadAll(attachments: MessageAttachment[]) {
             : `${original.slice(0, dot)}_${count}${original.slice(dot)}`;
     }
 
-    const results = await Promise.allSettled(attachments.map(async attachment => {
-        const filename = uniqueName(attachment.filename);
-        const sources = [attachment.proxy_url];
-        if (settings.store.downloadAllFileTypes) sources.push(attachment.url);
-        if (!sources.some(Boolean)) throw new Error("Missing attachment URL");
-
-        let res: Response | undefined;
-        for (const source of sources) {
-            if (!source) continue;
-            res = await fetch(source).catch(() => undefined);
-            if (res?.ok) break;
-        }
-        if (!res?.ok) throw new Error(res ? `HTTP ${res.status}` : "Network error");
-
-        const blob = await res.blob();
+    const results = await Promise.allSettled(items.map(async item => {
+        const blob = await item.load();
+        const extension = EXTENSIONS[blob.type.split(";")[0]];
         const url = URL.createObjectURL(blob);
 
         const a = document.createElement("a");
         a.href = url;
-        a.download = filename;
+        a.download = uniqueName(/\.\w{2,4}$/.test(item.name) || !extension ? item.name : `${item.name}.${extension}`);
         a.click();
         setTimeout(() => URL.revokeObjectURL(url), 10_000);
     }));
 
     const failed = results.filter(r => {
         if (r.status === "rejected") {
-            logger.warn("Failed to download attachment:", r.reason);
+            logger.warn("Failed to download file:", r.reason);
             return true;
         }
         return false;
     }).length;
 
-    const succeeded = attachments.length - failed;
+    const succeeded = items.length - failed;
 
     if (failed === 0)
-        showToast(`Downloaded ${pluralize(succeeded, "attachment")}.`, Toasts.Type.SUCCESS);
+        showToast(`Downloaded ${pluralize(succeeded, "file")}.`, Toasts.Type.SUCCESS);
     else
-        showToast(`Downloaded ${succeeded} of ${attachments.length} attachments. ${failed} failed.`, Toasts.Type.FAILURE);
+        showToast(`Downloaded ${succeeded} of ${items.length} files. ${failed} failed.`, Toasts.Type.FAILURE);
 }
 
 export default definePlugin({
     name: "DownloadAllAttachments",
-    description: "Adds a popover button to download all attachments in a message at once.",
+    description: "Adds a popover button to download every file, GIF, sticker, emoji and linked picture in a message at once.",
     tags: ["Utility", "Chat"],
     authors: [EquicordDevs.dhopcs],
     dependencies: ["MessagePopoverAPI"],
@@ -86,13 +80,13 @@ export default definePlugin({
     messagePopoverButton: {
         icon: CloudDownloadIcon,
         render(message: Message) {
-            if (!message.attachments.length) return null;
+            if (!hasMedia(message)) return null;
             return {
                 label: "Download All Attachments",
                 icon: CloudDownloadIcon,
                 message,
                 channel: ChannelStore.getChannel(message.channel_id),
-                onClick: () => downloadAll(message.attachments)
+                onClick: () => downloadAll(message)
             };
         }
     }
