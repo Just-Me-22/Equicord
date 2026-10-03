@@ -103,7 +103,10 @@ export default function TabGroup({ group, tabs, index }: { group: TabGroupType; 
             </button>
             {group.collapsed && <button
                 className={cl("button", "group-label")}
-                onClick={() => moveToTab(getGroupActiveTab(group.id).id)}
+                onClick={() => {
+                    const current = tabs.findIndex(tab => isTabSelected(tab.id));
+                    moveToTab(current === -1 ? getGroupActiveTab(group.id).id : tabs[(current + 1) % tabs.length].id);
+                }}
             >
                 <TabIcon tab={activeTab} />
                 <BaseText className={cl("name-text")}>{label}</BaseText>
