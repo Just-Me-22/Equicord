@@ -9,7 +9,7 @@ import ErrorBoundary from "@components/ErrorBoundary";
 import { ExpandableSection } from "@components/ExpandableCard";
 import { HeadingSecondary } from "@components/Heading";
 import { PluginNative } from "@utils/types";
-import { createRoot, React, Text, TextArea, TextInput, Toasts, useEffect, useMemo, useRef, useState } from "@webpack/common";
+import { createRoot, createToast,React, Text, TextArea, TextInput, Toasts, useEffect, useMemo, useRef, useState } from "@webpack/common";
 import type { Root } from "react-dom/client";
 
 import { read } from "./classMap";
@@ -102,7 +102,7 @@ function Try({ el }: { el: Element; }) {
                     type="button"
                     className={cl("text-button")}
                     disabled={!rule}
-                    onClick={() => navigator.clipboard.writeText(rule).then(() => Toasts.show({ message: "Copied as QuickCSS", id: Toasts.genId(), type: Toasts.Type.SUCCESS }))}
+                    onClick={() => navigator.clipboard.writeText(rule).then(() => Toasts.show(createToast({ message: "Copied as QuickCSS", type: "success" })))}
                 >
                     Copy as QuickCSS
                 </button>

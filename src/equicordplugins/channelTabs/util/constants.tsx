@@ -14,7 +14,7 @@ import { currentTabsSnapshot, replaceTabsWith } from "@equicordplugins/channelTa
 import { PersistedTabs, TabsSnapshot } from "@equicordplugins/channelTabs/util/types";
 import { Logger } from "@utils/Logger";
 import { makeRange, OptionType } from "@utils/types";
-import { Button, SearchableSelect, showToast, Toasts, UserStore, useState } from "@webpack/common";
+import { Button, SearchableSelect, showToast, UserStore, useState } from "@webpack/common";
 import { JSX } from "react";
 
 interface DynamicDropdownSettingOption {
@@ -123,7 +123,7 @@ function TabSyncSettings(): JSX.Element {
                         const at = Date.now();
                         settings.store.syncedTabs = { ...settings.store.syncedTabs, [userId]: { ...currentTabsSnapshot(), at } };
                         setSavedAt(at);
-                        showToast("Tabs sent up", Toasts.Type.SUCCESS);
+                        showToast("Tabs sent up", "success");
                     }}
                 >Send these tabs up</Button>
                 <Button
@@ -132,7 +132,7 @@ function TabSyncSettings(): JSX.Element {
                     onClick={() => {
                         if (!userId) return;
                         const ok = replaceTabsWith(settings.store.syncedTabs?.[userId]);
-                        showToast(ok ? "Tabs pulled down" : "Nothing saved to pull", ok ? Toasts.Type.SUCCESS : Toasts.Type.FAILURE);
+                        showToast(ok ? "Tabs pulled down" : "Nothing saved to pull", ok ? "success" : "failure");
                     }}
                 >Pull the saved tabs down</Button>
             </Flex>

@@ -7,7 +7,7 @@
 import { DataStore } from "@api/index";
 import { isPluginEnabled } from "@api/PluginManager";
 import { classNameFactory } from "@utils/css";
-import { NavigationRouter, ReadStateStore, SelectedChannelStore, SelectedGuildStore, showToast, Toasts, useEffect, useRef, useState } from "@webpack/common";
+import { NavigationRouter, ReadStateStore, SelectedChannelStore, SelectedGuildStore, showToast, useEffect, useRef, useState } from "@webpack/common";
 import { JSX } from "react";
 
 import { logger, settings } from "./constants";
@@ -560,7 +560,7 @@ export async function openStartupTabs(props: BasicChannelTabsProps & { userId: s
             savedTabs = persistedTabs?.[userId];
         } catch (error) {
             logger.error("Failed to load persisted tabs from DataStore", error);
-            showToast("Failed to load saved tabs", Toasts.Type.FAILURE);
+            showToast("Failed to load saved tabs", "failure");
         }
     }
 
@@ -574,7 +574,7 @@ export async function openStartupTabs(props: BasicChannelTabsProps & { userId: s
 
     if (keepCurrentChannel) {
         hydratedUserId = undefined;
-        showToast("Not restoring tabs as KeepCurrentChannel is enabled", Toasts.Type.FAILURE);
+        showToast("Not restoring tabs as KeepCurrentChannel is enabled", "failure");
         return;
     }
 
@@ -582,7 +582,7 @@ export async function openStartupTabs(props: BasicChannelTabsProps & { userId: s
     switch (settings.store.onStartup) {
         case "remember": {
             if (!savedTabs?.openTabs.length) {
-                showToast("Failed to restore tabs", Toasts.Type.FAILURE);
+                showToast("Failed to restore tabs", "failure");
                 break;
             }
 

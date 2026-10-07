@@ -11,7 +11,7 @@ import { Logger } from "@utils/Logger";
 import { pluralize } from "@utils/misc";
 import definePlugin, { OptionType } from "@utils/types";
 import { Message } from "@vencord/discord-types";
-import { ChannelStore, showToast, Toasts } from "@webpack/common";
+import { ChannelStore, showToast } from "@webpack/common";
 
 import { hasMedia, itemsOf } from "./media";
 
@@ -29,7 +29,7 @@ const settings = definePluginSettings({
 
 async function downloadAll(message: Message) {
     const items = await itemsOf(message, settings.store.downloadAllFileTypes);
-    showToast(`Downloading ${pluralize(items.length, "file")}...`, Toasts.Type.MESSAGE);
+    showToast(`Downloading ${pluralize(items.length, "file")}...`, "message");
     const usedNames = new Map<string, number>();
 
     function uniqueName(original: string): string {
@@ -65,9 +65,9 @@ async function downloadAll(message: Message) {
     const succeeded = items.length - failed;
 
     if (failed === 0)
-        showToast(`Downloaded ${pluralize(succeeded, "file")}.`, Toasts.Type.SUCCESS);
+        showToast(`Downloaded ${pluralize(succeeded, "file")}.`, "success");
     else
-        showToast(`Downloaded ${succeeded} of ${items.length} files. ${failed} failed.`, Toasts.Type.FAILURE);
+        showToast(`Downloaded ${succeeded} of ${items.length} files. ${failed} failed.`, "failure");
 }
 
 export default definePlugin({

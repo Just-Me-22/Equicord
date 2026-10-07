@@ -10,7 +10,7 @@ import ErrorBoundary from "@components/ErrorBoundary";
 import { PaintbrushIcon } from "@components/Icons";
 import { useForceUpdater } from "@utils/react";
 import definePlugin, { OptionType } from "@utils/types";
-import { Button, Forms, TextInput, Toasts, useEffect, useMemo, useRef, useState } from "@webpack/common";
+import { Button, createToast,Forms, TextInput, Toasts, useEffect, useMemo, useRef, useState } from "@webpack/common";
 
 import { build, current, read, search } from "./classMap";
 import { destroy, history, onHistory, show } from "./panel";
@@ -32,7 +32,7 @@ function start() {
         hold(el);
         show(el, undefined, at);
     });
-    Toasts.show({ message: "Click an element, or press escape.", id: Toasts.genId(), type: Toasts.Type.MESSAGE });
+    Toasts.show(createToast({ message: "Click an element, or press escape.", type: "message" }));
 }
 
 function Trigger() {

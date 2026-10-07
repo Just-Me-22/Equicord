@@ -9,7 +9,7 @@ import { sendMessage } from "@utils/discord";
 import { Logger } from "@utils/Logger";
 import { Channel, Emoji, Message } from "@vencord/discord-types";
 import { findByPropsLazy, findComponentByCodeLazy } from "@webpack";
-import { Constants, DraftActions, DraftStore, DraftType, EmojiStore, IconUtils, MessageStore, Popout, ReadStateStore, ReadStateUtils, RestAPI, showToast, Toasts, useEffect, useRef, UserStore, useState, useStateFromStores } from "@webpack/common";
+import { Constants, DraftActions, DraftStore, DraftType, EmojiStore, IconUtils, MessageStore, Popout, ReadStateStore, ReadStateUtils, RestAPI, showToast, useEffect, useRef, UserStore, useState, useStateFromStores } from "@webpack/common";
 
 import { displayName, getMessageContent } from "./content";
 import { loadRecent, useLastMessage } from "./hooks";
@@ -53,7 +53,7 @@ function react(channel: Channel, message: Message, emoji: EmojiSelectPayload | n
 
     RestAPI.put({ url: Constants.Endpoints.REACTION(channel.id, message.id, value, "@me") }).catch(err => {
         logger.error("could not react", err);
-        showToast("Could not add that reaction", Toasts.Type.FAILURE);
+        showToast("Could not add that reaction", "failure");
     });
 }
 
@@ -106,7 +106,7 @@ function Composer({ channel, close }: { channel: Channel; close: () => void; }) 
             return { shouldClear: true, shouldRefocus: false };
         } catch (err) {
             logger.error("could not send", err);
-            showToast("Could not send that message", Toasts.Type.FAILURE);
+            showToast("Could not send that message", "failure");
             return { shouldClear: false, shouldRefocus: true };
         }
     };

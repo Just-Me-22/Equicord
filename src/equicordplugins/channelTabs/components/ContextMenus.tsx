@@ -14,7 +14,7 @@ import { getIntlMessage } from "@utils/discord";
 import { Margins } from "@utils/margins";
 import { RenderModalProps } from "@vencord/discord-types";
 import { findByPropsLazy } from "@webpack";
-import { Button, ChannelStore, closeModal, ColorPicker, FluxDispatcher, Menu, Modal, openModal, ReadStateStore, ReadStateUtils, Select, showToast, TextInput, Toasts, useMemo, UserGuildSettingsStore, useState } from "@webpack/common";
+import { Button, ChannelStore, closeModal, ColorPicker, FluxDispatcher, Menu, Modal, openModal, ReadStateStore, ReadStateUtils, Select, showToast, TextInput, useMemo, UserGuildSettingsStore, useState } from "@webpack/common";
 
 const { updateChannelOverrideSettings } = findByPropsLazy("updateChannelOverrideSettings");
 
@@ -161,7 +161,7 @@ export function BasicContextMenu() {
                         placeholder: `Set ${sets.length + 1}`,
                         onSave: name => {
                             saveTabSet(name || `Set ${sets.length + 1}`);
-                            showToast("Tab set saved", Toasts.Type.SUCCESS);
+                            showToast("Tab set saved", "success");
                         }
                     })}
                 />
