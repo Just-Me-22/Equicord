@@ -266,7 +266,7 @@ export default definePlugin({
             find: ",{progressTextAnimation:",
             predicate: () => !getQuestifySettings().disableQuestsEverything,
             replacement: {
-                match: /(let{percentComplete:.{0,115}?children:\i,useAltStyle:\i=!1}=)(\i)/,
+                match: /(let{percentComplete:[^}]+}=)(\i)/,
                 replace: "const questifyProgress=$self.getQuestPanelPercentComplete({...$2,quest:$2.children?.props?.quest});$1Object.assign({},$2,questifyProgress??{})"
             }
         },
@@ -506,19 +506,19 @@ export default definePlugin({
             predicate: () => !getQuestifySettings().disableQuestsEverything,
             replacement: [
                 {
-                    // Runs Questify sorting in the hook-safe Quest list path and tracks manual rerenders.
+                    // Applies Questify filtering and sorting before Discord's Quest list hooks.
                     match: /,(\i)=new Map\((\i)\.map/,
-                    replace: ";const questRerenderTrigger=$self.useQuestRerender();const questifySorted=$self.sortQuests($2,arguments[1]?.sortMethod!==\"questify\");let $1=new Map($2.map"
+                    replace: ";const questRerenderTrigger=$self.useQuestRerender();const questifySorted=$self.sortQuests($2,arguments[1]?.sortMethod!==\"questify\");const questifyListChanged=questifySorted!==$2;$2=questifySorted;let $1=new Map($2.map"
                 },
                 {
-                    // Replaces Discord's filtered Quest list with Questify's order only when selected.
-                    match: /(?=if\(0===(\i)\.length\)return\[\];if\(\i\.current\.length>0)/,
-                    replace: "if(arguments[1]?.sortMethod===\"questify\"){$1=questifySorted;};"
-                },
-                {
-                    // Bypasses Discord's memo cache while the Questify sort is active.
+                    // Bypasses Discord's memo cache when Questify changes the list.
                     match: /(?<=if\()(?=\i\.current\.length>0&&\i\.current===)/,
-                    replace: "arguments[1]?.sortMethod!==\"questify\"&&"
+                    replace: "!questifyListChanged&&"
+                },
+                {
+                    // Bypasses the claimed Quest cache when Questify changes the list.
+                    match: /(?<=if\()(?=\i\.current\.length>0&&\i\.current\.length===)/,
+                    replace: "!questifyListChanged&&"
                 },
                 {
                     // If we already applied Questify's sort, skip further sorting.
