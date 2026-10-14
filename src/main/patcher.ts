@@ -61,6 +61,8 @@ if (!IS_VANILLA) {
         require("./persistAfterDiscordUpdates");
     }
 
+    if (process.platform === "win32") app.commandLine.appendSwitch("force_high_performance_gpu");
+
     if (process.platform === "win32" && settings.winCtrlQ) {
         const originalBuild = Menu.buildFromTemplate;
         Menu.buildFromTemplate = function (template) {
