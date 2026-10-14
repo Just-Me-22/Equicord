@@ -6,6 +6,7 @@
 
 import { getCurrentChannel } from "@utils/discord";
 import { isObjectEmpty } from "@utils/misc";
+import type { ChannelMemberGroup } from "@vencord/discord-types";
 import { ChannelMemberStore, ChannelStore, GuildMemberCountStore, PermissionsBits, PermissionStore, SelectedChannelStore, ThreadMemberListStore, Tooltip, useEffect, useStateFromStores, VoiceStateStore } from "@webpack/common";
 
 import { cl, numberFormat, settings } from ".";
@@ -58,11 +59,11 @@ export function MemberCount({ isTooltip, tooltipGuildId }: { isTooltip?: true; t
         () => {
             if (isTooltip || !guildId) return null;
 
-            const { groups } = ChannelMemberStore.getProps(guildId, currentChannel?.id);
+            const { groups } = ChannelMemberStore.getProps(guildId, currentChannel?.id) as { groups: (ChannelMemberGroup & { onlineCount?: number; })[]; };
 
             if (groups.length >= 1 || groups[0].id !== "unknown") {
                 return groups.reduce(
-                    (total, curr) => total + (curr.id === "offline" ? 0 : curr.count),
+                    (total, curr) => total + (curr.id === "offline" ? 0 : curr.onlineCount ?? curr.count),
                     0
                 );
             }
