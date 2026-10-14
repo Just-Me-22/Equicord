@@ -560,7 +560,7 @@ export function vars(el: Element): string[] {
 
     for (const name of worth) {
         const value = cs.getPropertyValue(name).trim();
-        if (value) rows.push(`${yours.has(name) ? "." : " "} ${name.padEnd(38)}${value}`);
+        if (value) rows.push(`${yours.has(name) ? "." : " "} ${name.padEnd(37)} ${value}`);
         else empty.push(name);
     }
 

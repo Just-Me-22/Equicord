@@ -313,7 +313,7 @@ export function hashDiff(previous: { file: string; text: string; }, el: Element)
         const old = before.get(one.name);
         if (!old) continue;
         if (old === one.token) same.push(one.name);
-        else changed.push(`${one.name.padEnd(30)}${old}  ->  ${one.token}`);
+        else changed.push(`${one.name.padEnd(29)} ${old}  ->  ${one.token}`);
     }
 
     const out = [`compared with ${previous.file}`, ""];
