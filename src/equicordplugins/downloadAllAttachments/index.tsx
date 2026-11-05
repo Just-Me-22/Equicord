@@ -27,9 +27,9 @@ const settings = definePluginSettings({
     }
 });
 
-function toast(message: string, type: Parameters<typeof showToast>[1]) {
+function toast(text: string, variant: NonNullable<Parameters<typeof showToast>[0]["variant"]>) {
     try {
-        showToast(message, type);
+        showToast({ text, variant });
     } catch (error) {
         logger.warn("Could not show toast:", error);
     }
@@ -37,7 +37,7 @@ function toast(message: string, type: Parameters<typeof showToast>[1]) {
 
 async function downloadAll(message: Message) {
     const items = await itemsOf(message, settings.store.downloadAllFileTypes);
-    toast(`Downloading ${pluralize(items.length, "file")}...`, "message");
+    toast(`Downloading ${pluralize(items.length, "file")}...`, "default");
     const usedNames = new Map<string, number>();
 
     function uniqueName(original: string): string {
@@ -75,7 +75,7 @@ async function downloadAll(message: Message) {
     if (failed === 0)
         toast(`Downloaded ${pluralize(succeeded, "file")}.`, "success");
     else
-        toast(`Downloaded ${succeeded} of ${items.length} files. ${failed} failed.`, "failure");
+        toast(`Downloaded ${succeeded} of ${items.length} files. ${failed} failed.`, "critical");
 }
 
 export default definePlugin({

@@ -16,18 +16,41 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import "./style.css";
-
 import { isPluginEnabled } from "@api/PluginManager";
 import { definePluginSettings } from "@api/Settings";
 import customUserColors, { getCustomColorString } from "@equicordplugins/customUserColors";
 import { Devs } from "@utils/constants";
+import { hasGuildFeature } from "@utils/discord";
 import { Logger } from "@utils/Logger";
 import definePlugin, { makeRange, OptionType } from "@utils/types";
+import { GuildMember, Role } from "@vencord/discord-types";
 import { findByCodeLazy } from "@webpack";
 import { ChannelStore, GuildMemberStore, GuildRoleStore, GuildStore } from "@webpack/common";
 
 const useMessageAuthor = findByCodeLazy('"Result cannot be null because the message is not null"');
+
+function getGradientColors(guildId: string, colorStrings: GuildMember["colorStrings"]) {
+    const guild = GuildStore.getGuild(guildId);
+    if (!guild || !hasGuildFeature(guild, "ENHANCED_ROLE_COLORS") || !colorStrings?.secondaryColor) return null;
+
+    return colorStrings;
+}
+
+function makeColorStyle(guildId: string, { colorString, colorStrings }: Pick<GuildMember | Role, "colorString" | "colorStrings">): React.CSSProperties | undefined {
+    const gradient = getGradientColors(guildId, colorStrings);
+    if (!gradient) return colorString ? { color: colorString } : undefined;
+
+    const { primaryColor, secondaryColor, tertiaryColor } = gradient;
+    const colors = [primaryColor, secondaryColor, tertiaryColor, primaryColor].filter(Boolean).join(",");
+
+    return {
+        color: primaryColor,
+        background: `linear-gradient(to right,${colors})`,
+        backgroundClip: "text",
+        backgroundSize: "100px auto",
+        WebkitTextFillColor: "transparent"
+    };
+}
 
 const settings = definePluginSettings({
     chatMentions: {
@@ -71,55 +94,10 @@ const settings = definePluginSettings({
         description: "Intensity of message coloring.",
         markers: makeRange(0, 100, 10),
         default: 30
-    },
-    gradientChatMessages: {
-        type: OptionType.BOOLEAN,
-        default: false,
-        description: "Color chat messages with the author's display name gradient, when they have one. Takes priority over the flat role color above",
-        restartNeeded: true
-    },
-    gradientMentions: {
-        type: OptionType.BOOLEAN,
-        default: false,
-        description: "Use the display name gradient for chat mentions (including in the message box)",
-        restartNeeded: true
-    },
-    animateGradients: {
-        type: OptionType.BOOLEAN,
-        default: true,
-        description: "Slide the gradients the way the display name does. Turn this off if chat starts feeling heavy"
-    },
-    gradientSpeed: {
-        type: OptionType.SLIDER,
-        description: "Seconds for one pass of the gradient.",
-        markers: [2, 3, 4, 6, 8, 12],
-        default: 4,
-        stickToMarkers: false
-    },
-    gradientSmoothness: {
-        type: OptionType.SLIDER,
-        description: "Gradient steps per second. Higher is smoother but repaints the text more often; 60 runs it fully smooth.",
-        markers: [8, 15, 24, 30, 60],
-        default: 24,
-        stickToMarkers: false
     }
 });
 
-const REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)");
-
-// background-clip:text cannot be composited, so every distinct frame is a real text
-// repaint for every gradient message on screen. stepping bounds that count; at 60 the
-// step boundaries land denser than the display refresh, so hand it to the compositor.
-function easing(seconds: number, stepsPerSecond: number) {
-    const fps = Math.round(stepsPerSecond);
-    if (fps >= 60) return "linear";
-    return `steps(${Math.max(1, Math.round(seconds * fps))})`;
-}
-
-// keyed by the settings too, so changing them supersedes old entries rather than
-// needing invalidation. holds nulls as well: most users have no gradient, and that
-// is the path every message render takes
-const gradientCache = new Map<string, any>();
+const logger = new Logger("RoleColorEverywhere");
 
 export default definePlugin({
     name: "RoleColorEverywhere",
@@ -135,10 +113,10 @@ export default definePlugin({
             replacement: [
                 {
                     match: /(?<=user:(\i),guildId:([^,]+?),.{0,100}?children:\i=>\i)\((\i)\)/,
-                    replace: "($self.getMentionProps($3,$1?.id,$2))",
+                    replace: "({...$3,color:$self.getColorInt($1?.id,$2),roleColors:$self.getRoleColors($1?.id,$2)})",
                 }
             ],
-            predicate: () => settings.store.chatMentions || settings.store.gradientMentions
+            predicate: () => settings.store.chatMentions
         },
         // Slate
         {
@@ -146,11 +124,11 @@ export default definePlugin({
             find: '"text":"locked"',
             replacement: [
                 {
-                    match: /let\{id:(\i),guildId:\i,channelId:(\i)[^}]*\}.*?\.\i,{(?=children)/,
-                    replace: "$&color:$self.getColorInt($1,$2),style:$self.getMentionStyle($1,$2),"
+                    match: /(?<=let\{id:(\i),guildId:\i,channelId:(\i)\}.{0,300}?popoutProps:)\i(?=\})/,
+                    replace: "{...$&,color:$self.getColorInt($1,$2),roleColors:$self.getRoleColors($1,$2)}"
                 }
             ],
-            predicate: () => settings.store.chatMentions || settings.store.gradientMentions
+            predicate: () => settings.store.chatMentions
         },
         // Member List Role Headers (in threads)
         {
@@ -158,7 +136,7 @@ export default definePlugin({
             replacement: [
                 {
                     match: /(?<=#{intl::CHANNEL_MEMBERS_A11Y_LABEL}.{0,400}?)children:(?=.{0,20}?(?:—|\\u2014) ",\i\])/,
-                    replace: "style:{color:$self.getRoleColor(arguments[0])},$&"
+                    replace: "style:$self.getRoleStyle(arguments[0]),$&"
                 },
             ],
             predicate: () => settings.store.memberList
@@ -169,7 +147,7 @@ export default definePlugin({
             replacement: [
                 {
                     match: /(?<=#{intl::CHANNEL_MEMBERS_A11Y_LABEL},\{title:\i,count:\i\}\)\}\),\(0,\i\.jsxs\)\("div",\{)/,
-                    replace: "style:{color:$self.getRoleColor(arguments[0])},"
+                    replace: "style:$self.getRoleStyle(arguments[0]),"
                 },
             ],
             predicate: () => settings.store.memberList
@@ -189,7 +167,7 @@ export default definePlugin({
         {
             find: "MessageReactions.render:",
             replacement: {
-                match: /tag:"strong",variant:"text-md\/medium"(?<=onContextMenu:.{0,15}\((\i),(\i),\i\).+?)/,
+                match: /tag:"strong",variant:"body-md\/medium"(?<=onContextMenu:.{0,15}\((\i),(\i),\i\).+?)/,
                 replace: "$&,style:$self.getColorStyle($2?.id,$1?.channel?.id)"
             },
             predicate: () => settings.store.reactorsList,
@@ -198,7 +176,7 @@ export default definePlugin({
         {
             find: ",reactionVoteCounts",
             replacement: {
-                match: /\.SIZE_32.+?variant:"text-md\/normal",className:\i\.\i,(?="aria-label":)/,
+                match: /\.SIZE_32.+?variant:"body-md\/normal",className:\i\.\i,(?="aria-label":)/,
                 replace: "$&style:$self.getColorStyle(arguments[0]?.user?.id,arguments[0]?.channel?.id),"
             },
             predicate: () => settings.store.pollResults
@@ -210,108 +188,63 @@ export default definePlugin({
                 match: /(?<=\]:(\i)\.isUnsupported.{0,50}?,)(?=children:\[)/,
                 replace: "style:$self.useMessageColorsStyle($1),"
             },
-            predicate: () => settings.store.colorChatMessages || settings.store.gradientChatMessages
+            predicate: () => settings.store.colorChatMessages
         }
     ],
 
-    getColorString(userId: string, channelOrGuildId: string) {
+    getMember(userId: string, channelOrGuildId: string) {
         try {
             if (isPluginEnabled(customUserColors.name)) {
                 const customColor = getCustomColorString(userId, true);
-                if (customColor) return customColor;
+                if (customColor) return { guildId: channelOrGuildId, member: { colorString: customColor, colorStrings: null } };
             }
 
             const guildId = ChannelStore.getChannel(channelOrGuildId)?.guild_id ?? GuildStore.getGuild(channelOrGuildId)?.id;
             if (guildId == null) return null;
 
-            return GuildMemberStore.getMember(guildId, userId)?.colorString ?? null;
+            const member = GuildMemberStore.getMember(guildId, userId);
+            return member && { guildId, member };
         } catch (e) {
-            new Logger("RoleColorEverywhere").error("Failed to get color string", e);
+            logger.error("Failed to get member", e);
         }
 
         return null;
     },
 
     getColorInt(userId: string, channelOrGuildId: string) {
-        const colorString = this.getColorString(userId, channelOrGuildId);
-        return colorString && parseInt(colorString.slice(1), 16);
-    },
-
-    getGradientStyle(userId: string, channelOrGuildId: string) {
         try {
-            const guildId = ChannelStore.getChannel(channelOrGuildId)?.guild_id ?? GuildStore.getGuild(channelOrGuildId)?.id;
-            if (guildId == null) return null;
-
-            const { animateGradients, gradientSpeed, gradientSmoothness } = settings.store;
-            const key = `${guildId}:${userId}:${animateGradients}:${gradientSpeed}:${gradientSmoothness}`;
-            if (gradientCache.has(key)) return gradientCache.get(key);
-
-            const member = GuildMemberStore.getMember(guildId, userId) as any;
-
-            // only a gradient *role* on the server. the personal collectible name style is
-            // deliberately not a source: a solid role must stay solid even when its owner
-            // has a gradient display name
-            const role = member?.colorStrings;
-            const stops = [role?.primaryColor, role?.secondaryColor, role?.tertiaryColor].filter(Boolean) as string[];
-
-            if (stops.length < 2) {
-                gradientCache.set(key, null);
-                return null;
-            }
-
-            const animate = animateGradients && !REDUCED_MOTION.matches;
-
-            const style = {
-                // mirrored, so the image ends on the colour it starts with and tiles seamlessly
-                backgroundImage: `linear-gradient(90deg, ${[...stops, ...stops.slice(0, -1).reverse()].join(", ")})`,
-                backgroundSize: "200% auto",
-                WebkitBackgroundClip: "text",
-                backgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                animation: animate ? `rce-gradient ${gradientSpeed}s ${easing(gradientSpeed, gradientSmoothness)} infinite` : undefined
-            };
-
-            gradientCache.set(key, style);
-            return style;
+            const colorString = this.getMember(userId, channelOrGuildId)?.member.colorString;
+            return colorString && parseInt(colorString.slice(1), 16);
         } catch (e) {
-            new Logger("RoleColorEverywhere").error("Failed to get gradient", e);
+            logger.error(e);
         }
-
-        return null;
     },
 
-    getMentionProps(props: any, userId: string, channelOrGuildId: string) {
-        const base = { ...props, color: this.getColorInt(userId, channelOrGuildId) };
-        if (!settings.store.gradientMentions) return base;
-
-        const gradient = this.getGradientStyle(userId, channelOrGuildId);
-        return gradient ? { ...base, style: { ...props?.style, ...gradient } } : base;
-    },
-
-    getMentionStyle(userId: string, channelOrGuildId: string) {
-        return settings.store.gradientMentions ? this.getGradientStyle(userId, channelOrGuildId) : undefined;
+    getRoleColors(userId: string, channelOrGuildId: string) {
+        try {
+            const data = this.getMember(userId, channelOrGuildId);
+            return data && getGradientColors(data.guildId, data.member.colorStrings);
+        } catch (e) {
+            logger.error(e);
+        }
     },
 
     getColorStyle(userId: string, channelOrGuildId: string) {
-        const colorString = this.getColorString(userId, channelOrGuildId);
-
-        return colorString && {
-            color: colorString
-        };
+        try {
+            const data = this.getMember(userId, channelOrGuildId);
+            return data && makeColorStyle(data.guildId, data.member);
+        } catch (e) {
+            logger.error(e);
+        }
     },
 
     useMessageColorsStyle(message: any) {
         try {
-            const { messageSaturation, gradientChatMessages } = settings.use(["messageSaturation", "gradientChatMessages"]);
+            const { messageSaturation } = settings.use(["messageSaturation"]);
             const author = useMessageAuthor(message);
 
             // Do not apply role color if the send fails, otherwise it becomes indistinguishable
             if (message.state === "SEND_FAILED") return;
-
-            if (gradientChatMessages) {
-                const gradient = this.getGradientStyle(message.author?.id, message.channel_id);
-                if (gradient) return gradient;
-            }
 
             if (author.colorString != null && messageSaturation !== 0) {
                 const value = `color-mix(in oklab, ${author.colorString} ${messageSaturation}%, var({DEFAULT}))`;
@@ -323,15 +256,18 @@ export default definePlugin({
                 };
             }
         } catch (e) {
-            new Logger("RoleColorEverywhere").error("Failed to get message color", e);
+            logger.error("Failed to get message color", e);
         }
 
         return null;
     },
 
-    getRoleColor(props: any) {
+    getRoleStyle(props: any) {
         try {
-            return GuildRoleStore.getRole(props?.guildId, props?.id)?.colorString;
-        } catch (e) { }
+            const role = GuildRoleStore.getRole(props?.guildId, props?.id);
+            return role && makeColorStyle(props.guildId, role);
+        } catch (e) {
+            logger.error("Failed to get role style", e);
+        }
     }
 });

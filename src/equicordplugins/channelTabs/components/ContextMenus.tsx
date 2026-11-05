@@ -5,6 +5,7 @@
  */
 
 import { BaseText } from "@components/BaseText";
+import { Button } from "@components/Button";
 import { Heading } from "@components/Heading";
 import { BookCheckIcon, OpenExternalIcon, PencilIcon, StarFilled, StarOutlined, TrashIcon, UnsendIcon, WindowTopOutlineIcon, XLargeBoldIcon } from "@components/Icons";
 import { Paragraph } from "@components/Paragraph";
@@ -379,8 +380,7 @@ function FolderAppearanceFields({
         >Choose Icon</Button>
         {iconName && <Button
             className={Margins.top8}
-            color={Button.Colors.TRANSPARENT}
-            look={Button.Looks.FILLED}
+            variant="secondary"
             onClick={() => setIconName(undefined)}
         >Use Default Icon</Button>}
     </>;
