@@ -53,7 +53,7 @@ function react(channel: Channel, message: Message, emoji: EmojiSelectPayload | n
 
     RestAPI.put({ url: Constants.Endpoints.REACTION(channel.id, message.id, value, "@me") }).catch(err => {
         logger.error("could not react", err);
-        showToast("Could not add that reaction", "failure");
+        showToast({ text: "Could not add that reaction", variant: "critical" });
     });
 }
 
@@ -106,7 +106,7 @@ function Composer({ channel, close }: { channel: Channel; close: () => void; }) 
             return { shouldClear: true, shouldRefocus: false };
         } catch (err) {
             logger.error("could not send", err);
-            showToast("Could not send that message", "failure");
+            showToast({ text: "Could not send that message", variant: "critical" });
             return { shouldClear: false, shouldRefocus: true };
         }
     };

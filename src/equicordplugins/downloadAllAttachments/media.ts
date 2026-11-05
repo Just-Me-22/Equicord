@@ -5,7 +5,7 @@
  */
 
 import type { PluginNative } from "@utils/types";
-import { Embed, EmbedMedia, Message } from "@vencord/discord-types";
+import { BasicMessage, Embed, EmbedMedia, Message } from "@vencord/discord-types";
 import { StickerFormatType } from "@vencord/discord-types/enums";
 
 import { videoToGif } from "./gif";
@@ -126,7 +126,7 @@ async function embedItems(embed: Embed): Promise<Item[]> {
     return preview && !preview.url.includes("/avatar/") ? [mediaFile(preview)] : [];
 }
 
-function stickerItems(message: Message): Item[] {
+function stickerItems(message: BasicMessage): Item[] {
     return message.stickerItems.flatMap(sticker => {
         const extension = STICKER_EXTENSIONS[sticker.format_type];
         if (!extension) return [];
@@ -135,7 +135,7 @@ function stickerItems(message: Message): Item[] {
     });
 }
 
-function emojiItems(message: Message): Item[] {
+function emojiItems(message: BasicMessage): Item[] {
     const seen = new Set<string>();
     return [...message.content.matchAll(new RegExp(EMOJI, "g"))].flatMap(([, animated, name, id]) => {
         if (seen.has(id)) return [];

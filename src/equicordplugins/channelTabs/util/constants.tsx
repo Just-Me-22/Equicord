@@ -5,6 +5,7 @@
  */
 
 import { definePluginSettings } from "@api/Settings";
+import { Button } from "@components/Button";
 import { Flex } from "@components/Flex";
 import { Heading } from "@components/Heading";
 import { Paragraph } from "@components/Paragraph";
@@ -14,7 +15,7 @@ import { currentTabsSnapshot, replaceTabsWith } from "@equicordplugins/channelTa
 import { PersistedTabs, TabsSnapshot } from "@equicordplugins/channelTabs/util/types";
 import { Logger } from "@utils/Logger";
 import { makeRange, OptionType } from "@utils/types";
-import { Button, SearchableSelect, showToast, UserStore, useState } from "@webpack/common";
+import { SearchableSelect, showToast, UserStore, useState } from "@webpack/common";
 import { JSX } from "react";
 
 import { Bookmarks } from "./types";
@@ -125,16 +126,15 @@ function TabSyncSettings(): JSX.Element {
                         const at = Date.now();
                         settings.store.syncedTabs = { ...settings.store.syncedTabs, [userId]: { ...currentTabsSnapshot(), at } };
                         setSavedAt(at);
-                        showToast("Tabs sent up", "success");
+                        showToast({ text: "Tabs sent up", variant: "success" });
                     }}
                 >Send these tabs up</Button>
-                <Button
-                    color={Button.Colors.PRIMARY}
+                <Button variant="secondary"
                     disabled={!savedAt}
                     onClick={() => {
                         if (!userId) return;
                         const ok = replaceTabsWith(settings.store.syncedTabs?.[userId]);
-                        showToast(ok ? "Tabs pulled down" : "Nothing saved to pull", ok ? "success" : "failure");
+                        showToast({ text: ok ? "Tabs pulled down" : "Nothing saved to pull", variant: ok ? "success" : "critical" });
                     }}
                 >Pull the saved tabs down</Button>
             </Flex>

@@ -134,7 +134,7 @@ function computeMessageContent(message: Message): MessageContent | null {
 
     const forwarded = message.messageSnapshots?.[0]?.message;
     if (forwarded) {
-        const inner = computeMessageContent(forwarded);
+        const inner = computeMessageContent(forwarded as Message);
         return inner && { ...inner, text: <>Forwarded: {inner.text}</> };
     }
 
@@ -186,7 +186,7 @@ export function plainText(message: Message): string {
     if (message.content) return hideSpoilers(message.content);
 
     const forwarded = message.messageSnapshots?.[0]?.message;
-    if (forwarded) return plainText(forwarded);
+    if (forwarded) return plainText(forwarded as Message);
     if (message.poll) return message.poll.question.text ?? "";
 
     if (message.attachments?.length) return message.attachments.map(a => a.filename).join(", ");

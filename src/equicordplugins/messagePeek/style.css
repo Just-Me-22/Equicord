@@ -15,11 +15,11 @@
     color: var(--text-default);
 }
 
-[class*="interactiveSelected__"] .vc-message-peek-timestamp {
+[class*="interactiveSelected_"] .vc-message-peek-timestamp {
     color: var(--white);
 }
 
-[class*="interactive__"]:hover .vc-message-peek-timestamp {
+[class*="interactive_"]:hover .vc-message-peek-timestamp {
     display: none;
 }
 
@@ -34,7 +34,7 @@
     margin-top: 0.8px;
 }
 
-[class*="interactive__"]:hover .vc-message-peek-icon svg path {
+[class*="interactive_"]:hover .vc-message-peek-icon svg path {
     fill: var(--white) !important;
 }
 
@@ -90,7 +90,7 @@
     filter: blur(4px);
 }
 
-[class*="interactive__"]:hover .vc-message-peek-blurred {
+[class*="interactive_"]:hover .vc-message-peek-blurred {
     filter: none;
 }
 
@@ -151,8 +151,8 @@
     gap: 2px;
 }
 
-[class*="interactive__"]:hover .vc-message-peek-actions,
-[class*="interactive__"]:focus-within .vc-message-peek-actions,
+[class*="interactive_"]:hover .vc-message-peek-actions,
+[class*="interactive_"]:focus-within .vc-message-peek-actions,
 .vc-message-peek-actions-open {
     display: flex;
 }

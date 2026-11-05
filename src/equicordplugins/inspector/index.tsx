@@ -6,11 +6,13 @@
 
 import { addChannelToolbarButton, HeaderBarButton, removeChannelToolbarButton } from "@api/HeaderBar";
 import { definePluginSettings } from "@api/Settings";
+import { Button } from "@components/Button";
 import ErrorBoundary from "@components/ErrorBoundary";
 import { PaintbrushIcon } from "@components/Icons";
+import { Paragraph } from "@components/Paragraph";
 import { useForceUpdater } from "@utils/react";
 import definePlugin, { OptionType } from "@utils/types";
-import { Button, createToast,Forms, TextInput, Toasts, useEffect, useMemo, useRef, useState } from "@webpack/common";
+import { showToast, TextInput, useEffect, useMemo, useRef, useState } from "@webpack/common";
 
 import { build, current, read, search } from "./classMap";
 import { destroy, history, onHistory, show } from "./panel";
@@ -32,7 +34,7 @@ function start() {
         hold(el);
         show(el, undefined, at);
     });
-    Toasts.show(createToast({ message: "Click an element, or press escape.", type: "message" }));
+    showToast({ text: "Click an element, or press escape." });
 }
 
 function Trigger() {
@@ -63,21 +65,21 @@ function Picked() {
     });
 
     if (!held) {
-        return <Forms.FormText>Press ctrl+alt+i, then click anything in Discord.</Forms.FormText>;
+        return <Paragraph>Press ctrl+alt+i, then click anything in Discord.</Paragraph>;
     }
 
     const named = read(held);
     return (
         <>
             <div ref={shot} style={{ margin: "8px 0" }} />
-            <Forms.FormText style={mono}>
+            <Paragraph style={mono}>
                 {held.tagName.toLowerCase()}
                 {named.length ? "" : "  (no classes)"}
-            </Forms.FormText>
+            </Paragraph>
             {named.map(one => (
-                <Forms.FormText key={one.token} style={mono}>
+                <Paragraph key={one.token} style={mono}>
                     .{one.token}{one.name ? `   is ${one.name}` : "   not in the map"}
-                </Forms.FormText>
+                </Paragraph>
             ))}
             <History />
         </>
@@ -88,7 +90,7 @@ function History() {
     if (history.length < 2) return null;
     return (
         <div className="vc-inspector-history">
-            <Forms.FormText>Recent picks</Forms.FormText>
+            <Paragraph>Recent picks</Paragraph>
             {history.map((one, i) => {
                 const el = one.ref.deref();
                 const live = !!el?.isConnected;
@@ -125,13 +127,13 @@ function Lookup() {
 
     return (
         <>
-            <Forms.FormText>
+            <Paragraph>
                 {map.classes} classes across {map.modules} loaded modules, read in {Math.round(map.ms)}ms.
-            </Forms.FormText>
+            </Paragraph>
 
             <div style={{ display: "flex", gap: 8, margin: "8px 0" }}>
                 <TextInput value={query} onChange={setQuery} placeholder="mentioned" style={{ flex: 1 }} />
-                <Button size={Button.Sizes.SMALL} onClick={() => { build(); setBuilt(n => n + 1); }}>
+                <Button size="small" onClick={() => { build(); setBuilt(n => n + 1); }}>
                     Rescan
                 </Button>
             </div>
@@ -149,10 +151,10 @@ function Lookup() {
                         show(first);
                     }}
                 >
-                    <Forms.FormText style={mono}>
+                    <Paragraph style={mono}>
                         {hit.name} &rarr; {hit.tokens.join("  ")}
                         {hit.found.length ? `   ${hit.found.length} on screen` : ""}
-                    </Forms.FormText>
+                    </Paragraph>
                 </div>
             ))}
         </>

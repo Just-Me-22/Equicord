@@ -7,9 +7,10 @@
 import { Settings } from "@api/Settings";
 import ErrorBoundary from "@components/ErrorBoundary";
 import { ExpandableSection } from "@components/ExpandableCard";
-import { HeadingSecondary } from "@components/Heading";
+import { Heading } from "@components/Heading";
+import { Text } from "@components/Text";
 import { PluginNative } from "@utils/types";
-import { createRoot, createToast,React, Text, TextArea, TextInput, Toasts, useEffect, useMemo, useRef, useState } from "@webpack/common";
+import { createRoot, React, showToast, TextArea, TextInput, useEffect, useMemo, useRef, useState } from "@webpack/common";
 import type { Root } from "react-dom/client";
 
 import { read } from "./classMap";
@@ -59,7 +60,7 @@ function Section({ title, lines, start, n, copied, onCopy }: {
                 <kbd className={cl("key", copied && "key-done")} onClick={take} title={n < 10 ? `Copy, or press ${n}` : "Copy"}>
                     {copied ? <Icon name="check" /> : n < 10 ? n : "·"}
                 </kbd>
-                <HeadingSecondary className={cl("section-title")}>{title}</HeadingSecondary>
+                <Heading tag="h3" className={cl("section-title")}>{title}</Heading>
                 <span className={cl("count")}>{lines.length}</span>
             </div>
         </ExpandableSection>
@@ -102,7 +103,7 @@ function Try({ el }: { el: Element; }) {
                     type="button"
                     className={cl("text-button")}
                     disabled={!rule}
-                    onClick={() => navigator.clipboard.writeText(rule).then(() => Toasts.show(createToast({ message: "Copied as QuickCSS", type: "success" })))}
+                    onClick={() => navigator.clipboard.writeText(rule).then(() => showToast({ text: "Copied as QuickCSS", variant: "success" }))}
                 >
                     Copy as QuickCSS
                 </button>
@@ -403,7 +404,7 @@ function Report({ el, other }: { el: Element; other?: Element; }) {
             <ExpandableSection initialExpanded={false} renderContent={() => <Try el={el} />}>
                 <div className={cl("section-head")}>
                     <kbd className={cl("key")}>·</kbd>
-                    <HeadingSecondary className={cl("section-title")}>Try a value</HeadingSecondary>
+                    <Heading tag="h3" className={cl("section-title")}>Try a value</Heading>
                 </div>
             </ExpandableSection>
 
@@ -420,7 +421,7 @@ function Sheet({ el, other, at }: { el: Element; other?: Element; at?: Point; })
         <aside className={cl("sheet")} aria-label="Inspector">
             <header className={cl("sheet-head")}>
                 <div className={cl("sheet-title")}>
-                    <Text variant="heading-md/semibold">Inspector</Text>
+                    <Text size="md" weight="semibold">Inspector</Text>
                     <span className={cl("sheet-subtitle")}>{named ? `${el.tagName.toLowerCase()} · ${named}` : el.tagName.toLowerCase()}</span>
                 </div>
                 <button type="button" className={cl("tool")} aria-label="Close" data-tip="Close" onClick={close}>

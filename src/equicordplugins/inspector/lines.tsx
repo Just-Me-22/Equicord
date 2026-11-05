@@ -5,7 +5,7 @@
  */
 
 import { classNameFactory } from "@utils/css";
-import { createToast,React, Toasts } from "@webpack/common";
+import { React, showToast } from "@webpack/common";
 
 export const cl = classNameFactory("vc-inspector-");
 
@@ -49,8 +49,8 @@ function Rich({ text }: { text: string; }) {
 
 function copy(text: string, what: string) {
     navigator.clipboard.writeText(text).then(
-        () => Toasts.show(createToast({ message: `Copied ${what}`, type: "success" })),
-        () => Toasts.show(createToast({ message: "Could not copy", type: "failure" }))
+        () => showToast({ text: `Copied ${what}`, variant: "success" }),
+        () => showToast({ text: "Could not copy", variant: "critical" })
     );
 }
 

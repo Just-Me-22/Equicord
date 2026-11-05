@@ -14,7 +14,7 @@ import { classNameFactory } from "@utils/css";
 import { classes } from "@utils/misc";
 import { useForceUpdater } from "@utils/react";
 import { findComponentByCodeLazy } from "@webpack";
-import { Button, ChannelRTCStore, ChannelStore, ContextMenuApi, FluxDispatcher, GuildStore, ReadStateStore, SelectedChannelStore, TextInput, Tooltip, useCallback, useEffect, useRef, UserStore, useState, useStateFromStores } from "@webpack/common";
+import { ChannelRTCStore, ChannelStore, ContextMenuApi, FluxDispatcher, GuildStore, ReadStateStore, SelectedChannelStore, TextInput, Tooltip, useCallback, useEffect, useRef, UserStore, useState, useStateFromStores } from "@webpack/common";
 
 import channelTabs from "..";
 import { anyTabHasMention } from "../util/tabs";
