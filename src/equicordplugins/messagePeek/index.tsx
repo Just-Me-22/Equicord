@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import "./style.css";
-
 import { DecoratorProps } from "@api/MemberListDecorators";
 import { Devs, EquicordDevs } from "@utils/constants";
 import definePlugin from "@utils/types";
@@ -14,6 +12,7 @@ import { startWatching, stopWatching } from "./hooks";
 import { Decorator, PrivateChannelProps, SubText } from "./Preview";
 import { clearSearch, useFilteredIds, withSearch } from "./Search";
 import { settings } from "./settings";
+import managedStyle from "./style.css?managed";
 
 export default definePlugin({
     name: "MessagePeek",
@@ -22,6 +21,7 @@ export default definePlugin({
     tags: ["Appearance", "Chat"],
     authors: [Devs.prism, EquicordDevs.justjxke],
     settings,
+    managedStyle,
     patches: [
         {
             find: "PrivateChannel.renderAvatar",

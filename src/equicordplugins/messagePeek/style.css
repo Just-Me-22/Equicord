@@ -23,6 +23,10 @@
     display: none;
 }
 
+nav[class*="privateChannels_"] [class*="interactive_"]:not(:hover) [class*="name_"] {
+    padding-right: 34px;
+}
+
 .vc-message-peek-preview {
     display: flex;
     align-items: center;
