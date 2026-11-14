@@ -107,7 +107,8 @@ const TypingUser = ErrorBoundary.wrap(function TypingUser({ user, guildId }: Typ
                     src={user.getAvatarURL(guildId, 128)} />
             )}
             {isPluginEnabled(showMeYourName.name)
-                && showMeYourName.getTypingMemberListProfilesReactionsVoiceNameText({ user, guildId, type: "typingIndicator" })
+                && (showMeYourName.getTypingMemberListProfilesReactionsVoiceNameElement({ user, guildId, type: "typingIndicator" })
+                    ?? showMeYourName.getTypingMemberListProfilesReactionsVoiceNameText({ user, guildId, type: "typingIndicator" }))
                 || GuildMemberStore.getNick(guildId!, user.id)
                 || (!guildId && RelationshipStore.getNickname(user.id))
                 || (user as any).globalName
@@ -135,7 +136,7 @@ export default definePlugin({
             replacement: [
                 {
                     // Style the indicator and add function call to modify the children before rendering
-                    match: /(?<="aria-hidden":!0,children:)\i/,
+                    match: /(?<="aria-hidden":!0,children:)\i(?=\}\),\(0,\i\.jsx\)\("span",\{className:\i\.\i,style:\{position:"absolute")/,
                     replace: "$self.renderTypingUsers({ users: arguments[0]?.typingUserObjects, guildId: arguments[0]?.channel?.guild_id, children: $& })"
                 },
                 {
@@ -200,12 +201,16 @@ export default definePlugin({
 
             let element = 0;
 
-            return children.map(c => {
-                if (c.type !== "strong" && !(typeof c !== "string" && !React.isValidElement(c))) return c;
+            return (
+                <span className={cl("line")}>
+                    {children.map(c => {
+                        if (c.type !== "strong" && !(typeof c !== "string" && !React.isValidElement(c))) return c;
 
-                const user = users[element++];
-                return <TypingUser key={user.id} guildId={guildId} user={user} />;
-            });
+                        const user = users[element++];
+                        return <TypingUser key={user.id} guildId={guildId} user={user} />;
+                    })}
+                </span>
+            );
         } catch (e) {
             new Logger("TypingTweaks").error("Failed to render typing users:", e);
         }
