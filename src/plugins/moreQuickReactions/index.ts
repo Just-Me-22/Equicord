@@ -15,7 +15,9 @@ const settings = definePluginSettings({
         description: "Number of reactions (0-42)",
         type: OptionType.NUMBER,
         restartNeeded: true,
-        default: 5
+        default: 5,
+        min: 0,
+        max: 42
     },
     frequentEmojis: {
         description: "Use frequently used emojis instead of favorite emojis",
@@ -60,7 +62,7 @@ export default definePlugin({
 
     patches: [
         {
-            find: 'navId:"message-actions"',
+            find: "#{intl::MESSAGE_UTILITIES_A11Y_LABEL}),children",
             replacement: {
                 match: /(?<=length>=3\?.{0,40})\.slice\(0,3\)/,
                 replace: ".slice(0,$self.reactionCount)"
@@ -85,8 +87,8 @@ export default definePlugin({
                 },
                 // Override limit of emojis to display with offset hook.
                 {
-                    match: /,(?=\i=\(\(\i=\(0,\i\.\i\)\(\i\.guild_id\)\.filter\()/,
-                    replace: ",[moreQuickReactionsScrollValue,setMoreQuickReactionsScrollValue]=Vencord.Webpack.Common.React.useState(0),"
+                    match: /\i=\(\(\i=\(0,\i\.\i\)\(\i\.guild_id\)\.filter\(/,
+                    replace: "[moreQuickReactionsScrollValue,setMoreQuickReactionsScrollValue]=Vencord.Webpack.Common.React.useState(0),$&"
                 },
                 {
                     match: /\.length>4&&\(\i\.length=4\)/,
