@@ -1125,7 +1125,7 @@
 .vc-channeltabs-container-top.vc-channeltabs-container-autohide .vc-channeltabs-tab-container {
     top: 100%;
     bottom: auto;
-    transform: translateY(-8px);
+    transform: none;
 }
 
 .vc-channeltabs-container-autohide:hover .vc-channeltabs-tab-container,

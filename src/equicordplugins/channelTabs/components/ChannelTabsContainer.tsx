@@ -33,26 +33,43 @@ const EASE = "0.32s cubic-bezier(0.65, 0, 0.35, 1)";
 
 const isFixed = (el: Element) => getComputedStyle(el).position === "fixed";
 
+const SHIFTED = "data-vc-tabs-shift";
+const UNCLIPPED = "data-vc-tabs-unclip";
+
 function slideTargets(el: HTMLElement): HTMLElement[] {
     const kids = Array.from(el.children).filter((k): k is HTMLElement => k instanceof HTMLElement);
-    return kids.some(isFixed) ? kids.filter(k => !isFixed(k)) : [el];
+    if (!kids.some(isFixed)) return [el];
+    el.setAttribute(UNCLIPPED, "");
+    el.style.setProperty("overflow", "visible", "important");
+    return kids.filter(k => !isFixed(k));
+}
+
+function settleShifted(animate: boolean) {
+    const shifted = Array.from(document.querySelectorAll<HTMLElement>(`[${SHIFTED}]`));
+    const unclipped = Array.from(document.querySelectorAll<HTMLElement>(`[${UNCLIPPED}]`));
+    for (const el of shifted) {
+        el.removeAttribute(SHIFTED);
+        el.style.transition = animate ? `transform ${EASE}` : "";
+        el.style.transform = "";
+    }
+    return setTimeout(() => {
+        for (const el of shifted) if (!el.hasAttribute(SHIFTED)) el.style.transition = "";
+        for (const el of unclipped) {
+            if (el.querySelector(`:scope > [${SHIFTED}]`)) continue;
+            el.removeAttribute(UNCLIPPED);
+            el.style.removeProperty("overflow");
+        }
+    }, 400);
 }
 
 function usePushContentBelow(barRef: React.RefObject<HTMLDivElement | null>, open: boolean) {
-    const moved = useRef<HTMLElement[]>([]);
-
     useEffect(() => {
         const bar = barRef.current;
         const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
         if (!open || !bar) {
-            for (const el of moved.current) {
-                el.style.transition = still ? "" : `transform ${EASE}`;
-                el.style.transform = "";
-            }
-            const settled = moved.current;
-            moved.current = [];
-            const clear = setTimeout(() => settled.forEach(el => { if (!el.style.transform) el.style.transition = ""; }), 400);
+            bar?.style.removeProperty("--vc-tabs-shift");
+            const clear = settleShifted(!still);
             return () => clearTimeout(clear);
         }
 
@@ -60,21 +77,39 @@ function usePushContentBelow(barRef: React.RefObject<HTMLDivElement | null>, ope
         const shift = row?.offsetHeight ?? 0;
         if (!shift) return;
 
+        bar.style.setProperty("--vc-tabs-shift", `${shift}px`);
         const edge = bar.getBoundingClientRect().bottom - 1;
-        moved.current = Array.from(bar.parentElement?.children ?? [])
-            .filter((el): el is HTMLElement => el !== bar && el instanceof HTMLElement && el.getBoundingClientRect().top >= edge)
+        const targets = Array.from(bar.parentElement?.children ?? [])
+            .filter((el): el is HTMLElement => el !== bar && el instanceof HTMLElement
+                && (el.classList.contains("vc-region-ring") || el.getBoundingClientRect().top >= edge))
             .flatMap(slideTargets);
 
-        for (const el of moved.current) {
+        for (const el of targets) {
+            el.setAttribute(SHIFTED, "");
             el.style.transition = still ? "" : `transform ${EASE} 0.15s`;
             el.style.transform = `translateY(${shift}px)`;
         }
     }, [open]);
 
-    useEffect(() => () => moved.current.forEach(el => {
-        el.style.transition = "";
-        el.style.transform = "";
-    }), []);
+    useEffect(() => () => void settleShifted(false), []);
+}
+
+function useHoverOut(barRef: React.RefObject<HTMLDivElement | null>, hovered: boolean, setHovered: (value: boolean) => void) {
+    useEffect(() => {
+        if (!hovered) return;
+        const leave = () => setHovered(false);
+        const over = (e: PointerEvent) => {
+            if (!barRef.current?.contains(e.target as Node)) leave();
+        };
+        document.addEventListener("pointerover", over, { passive: true });
+        document.documentElement.addEventListener("pointerleave", leave);
+        window.addEventListener("blur", leave);
+        return () => {
+            document.removeEventListener("pointerover", over);
+            document.documentElement.removeEventListener("pointerleave", leave);
+            window.removeEventListener("blur", leave);
+        };
+    }, [hovered]);
 }
 
 /** a dm has no name of its own, so it is searched by who is in it */
@@ -189,6 +224,7 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
     const [hovered, setHovered] = useState(false);
     const rowOpen = autoHideTabBar && tabBarPosition === "top" && (hovered || (revealOnMention && hasMention));
     usePushContentBelow(ref, rowOpen);
+    useHoverOut(ref, hovered, setHovered);
 
     useEffect(() => {
         return setUpdaterFunction(update);
