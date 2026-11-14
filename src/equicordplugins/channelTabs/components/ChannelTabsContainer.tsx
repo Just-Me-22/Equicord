@@ -29,27 +29,30 @@ const PlusSmallIcon = findComponentByCodeLazy("0v-5h5a1");
 
 const cl = classNameFactory("vc-channeltabs-");
 
-const EASE = "0.2s cubic-bezier(0.23, 1, 0.32, 1)";
+const EASE = "0.32s cubic-bezier(0.65, 0, 0.35, 1)";
 
-interface Moved { el: HTMLElement; prop: "top" | "transform"; }
+const isFixed = (el: Element) => getComputedStyle(el).position === "fixed";
+
+function slideTargets(el: HTMLElement): HTMLElement[] {
+    const kids = Array.from(el.children).filter((k): k is HTMLElement => k instanceof HTMLElement);
+    return kids.some(isFixed) ? kids.filter(k => !isFixed(k)) : [el];
+}
 
 function usePushContentBelow(barRef: React.RefObject<HTMLDivElement | null>, open: boolean) {
-    const moved = useRef<Moved[]>([]);
+    const moved = useRef<HTMLElement[]>([]);
 
     useEffect(() => {
         const bar = barRef.current;
         const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
         if (!open || !bar) {
-            for (const { el, prop } of moved.current) {
-                el.style.transition = still ? "" : `${prop} ${EASE}`;
-                el.style.removeProperty(prop);
+            for (const el of moved.current) {
+                el.style.transition = still ? "" : `transform ${EASE}`;
+                el.style.transform = "";
             }
             const settled = moved.current;
             moved.current = [];
-            const clear = setTimeout(() => settled.forEach(({ el, prop }) => {
-                if (!el.style.getPropertyValue(prop)) el.style.transition = "";
-            }), 250);
+            const clear = setTimeout(() => settled.forEach(el => { if (!el.style.transform) el.style.transition = ""; }), 400);
             return () => clearTimeout(clear);
         }
 
@@ -58,24 +61,19 @@ function usePushContentBelow(barRef: React.RefObject<HTMLDivElement | null>, ope
         if (!shift) return;
 
         const edge = bar.getBoundingClientRect().bottom - 1;
-        const below = Array.from(bar.parentElement?.children ?? []).filter((el): el is HTMLElement =>
-            el !== bar && el instanceof HTMLElement && el.getBoundingClientRect().top >= edge
-        );
+        moved.current = Array.from(bar.parentElement?.children ?? [])
+            .filter((el): el is HTMLElement => el !== bar && el instanceof HTMLElement && el.getBoundingClientRect().top >= edge)
+            .flatMap(slideTargets);
 
-        moved.current = below.map(el => {
-            const cs = getComputedStyle(el);
-            const positioned = cs.position !== "static";
-            const prop = positioned ? "top" : "transform";
-            const base = positioned && cs.top !== "auto" ? cs.top : "0px";
-            el.style.transition = still ? "" : `${prop} ${EASE} 0.15s`;
-            el.style.setProperty(prop, positioned ? `calc(${base} + ${shift}px)` : `translateY(${shift}px)`);
-            return { el, prop };
-        });
+        for (const el of moved.current) {
+            el.style.transition = still ? "" : `transform ${EASE} 0.15s`;
+            el.style.transform = `translateY(${shift}px)`;
+        }
     }, [open]);
 
-    useEffect(() => () => moved.current.forEach(({ el, prop }) => {
+    useEffect(() => () => moved.current.forEach(el => {
         el.style.transition = "";
-        el.style.removeProperty(prop);
+        el.style.transform = "";
     }), []);
 }
 

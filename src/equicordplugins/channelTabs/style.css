@@ -1117,6 +1117,11 @@
         visibility 0s linear 0.2s;
 }
 
+.vc-channeltabs-container-top.vc-channeltabs-container-autohide {
+    --vc-channeltabs-move: 0.32s cubic-bezier(0.65, 0, 0.35, 1);
+    --vc-channeltabs-fade: 0.24s ease;
+}
+
 .vc-channeltabs-container-top.vc-channeltabs-container-autohide .vc-channeltabs-tab-container {
     top: 100%;
     bottom: auto;
