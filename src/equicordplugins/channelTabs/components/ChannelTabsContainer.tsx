@@ -29,6 +29,56 @@ const PlusSmallIcon = findComponentByCodeLazy("0v-5h5a1");
 
 const cl = classNameFactory("vc-channeltabs-");
 
+const EASE = "0.2s cubic-bezier(0.23, 1, 0.32, 1)";
+
+interface Moved { el: HTMLElement; prop: "top" | "transform"; }
+
+function usePushContentBelow(barRef: React.RefObject<HTMLDivElement | null>, open: boolean) {
+    const moved = useRef<Moved[]>([]);
+
+    useEffect(() => {
+        const bar = barRef.current;
+        const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+        if (!open || !bar) {
+            for (const { el, prop } of moved.current) {
+                el.style.transition = still ? "" : `${prop} ${EASE}`;
+                el.style.removeProperty(prop);
+            }
+            const settled = moved.current;
+            moved.current = [];
+            const clear = setTimeout(() => settled.forEach(({ el, prop }) => {
+                if (!el.style.getPropertyValue(prop)) el.style.transition = "";
+            }), 250);
+            return () => clearTimeout(clear);
+        }
+
+        const row = bar.querySelector<HTMLElement>(`.${cl("tab-container")}`);
+        const shift = row?.offsetHeight ?? 0;
+        if (!shift) return;
+
+        const edge = bar.getBoundingClientRect().bottom - 1;
+        const below = Array.from(bar.parentElement?.children ?? []).filter((el): el is HTMLElement =>
+            el !== bar && el instanceof HTMLElement && el.getBoundingClientRect().top >= edge
+        );
+
+        moved.current = below.map(el => {
+            const cs = getComputedStyle(el);
+            const positioned = cs.position !== "static";
+            const prop = positioned ? "top" : "transform";
+            const base = positioned && cs.top !== "auto" ? cs.top : "0px";
+            el.style.transition = still ? "" : `${prop} ${EASE} 0.15s`;
+            el.style.setProperty(prop, positioned ? `calc(${base} + ${shift}px)` : `translateY(${shift}px)`);
+            return { el, prop };
+        });
+    }, [open]);
+
+    useEffect(() => () => moved.current.forEach(({ el, prop }) => {
+        el.style.transition = "";
+        el.style.removeProperty(prop);
+    }), []);
+}
+
 /** a dm has no name of its own, so it is searched by who is in it */
 function tabText(tab: ChannelTabsProps): string {
     const channel = ChannelStore.getChannel(tab.channelId);
@@ -137,6 +187,10 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
     const scrollerRef = useRef<HTMLDivElement>(null);
     const currentChannelRef = useRef(props);
     currentChannelRef.current = props;
+
+    const [hovered, setHovered] = useState(false);
+    const rowOpen = autoHideTabBar && tabBarPosition === "top" && (hovered || (revealOnMention && hasMention));
+    usePushContentBelow(ref, rowOpen);
 
     useEffect(() => {
         return setUpdaterFunction(update);
@@ -447,6 +501,8 @@ export default function ChannelsTabsContainer(props: BasicChannelTabsProps) {
             ref={ref}
             style={{ "--tab-width-scale": tabWidthScale / 100, "--tab-height-scale": tabHeightScale / 100 } as React.CSSProperties}
             onContextMenu={e => ContextMenuApi.openContextMenu(e, () => <BasicContextMenu />)}
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
         >
             {showBookmarkBar && <BookmarkContainer {...props} userId={userId} />}
             <div
