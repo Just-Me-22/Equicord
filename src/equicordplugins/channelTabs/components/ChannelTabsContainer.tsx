@@ -74,7 +74,8 @@ function usePushContentBelow(barRef: React.RefObject<HTMLDivElement | null>, ope
         }
 
         const row = bar.querySelector<HTMLElement>(`.${cl("tab-container")}`);
-        const shift = row?.offsetHeight ?? 0;
+        const ratio = window.devicePixelRatio || 1;
+        const shift = Math.ceil((row?.offsetHeight ?? 0) * ratio) / ratio;
         if (!shift) return;
 
         bar.style.setProperty("--vc-tabs-shift", `${shift}px`);
