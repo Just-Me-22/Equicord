@@ -90,6 +90,17 @@ function usePushContentBelow(barRef: React.RefObject<HTMLDivElement | null>, ope
             el.style.transition = still ? "" : `transform ${EASE} 0.15s`;
             el.style.transform = `translateY(${shift}px)`;
         }
+
+        const late = new MutationObserver(records => {
+            for (const { addedNodes } of records)
+                for (const node of addedNodes)
+                    if (node instanceof HTMLElement && node.classList.contains("vc-region-ring") && !node.hasAttribute(SHIFTED)) {
+                        node.setAttribute(SHIFTED, "");
+                        node.style.transform = `translateY(${shift}px)`;
+                    }
+        });
+        if (bar.parentElement) late.observe(bar.parentElement, { childList: true });
+        return () => late.disconnect();
     }, [open]);
 
     useEffect(() => () => void settleShifted(false), []);
