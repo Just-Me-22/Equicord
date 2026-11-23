@@ -108,7 +108,7 @@
     z-index: 1100;
     display: flex;
     flex-direction: column;
-    width: min(560px, 46vw);
+    width: min(var(--vc-inspector-width, 560px), 80vw);
     overflow: hidden;
     border: 1px solid var(--border-subtle, rgb(255 255 255 / 8%));
     border-radius: 12px;
@@ -518,6 +518,127 @@
     .vc-inspector-padding,
     .vc-inspector-gap,
     .vc-inspector-label {
+        transition: none;
+    }
+}
+
+.vc-inspector-sheet-left {
+    right: auto;
+    left: 12px;
+    animation-name: vc-inspector-in-left;
+}
+
+@keyframes vc-inspector-in-left {
+    from {
+        opacity: 0;
+        translate: -16px 0;
+    }
+}
+
+.vc-inspector-grip {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 2;
+    width: 6px;
+    cursor: ew-resize;
+    transition: background-color 0.12s ease-out;
+}
+
+.vc-inspector-sheet-left .vc-inspector-grip {
+    right: 0;
+    left: auto;
+}
+
+.vc-inspector-grip:hover,
+.vc-inspector-grip:active {
+    background: var(--vc-inspector-accent-soft);
+}
+
+.vc-inspector-tool:disabled {
+    color: var(--interactive-muted, var(--text-muted));
+    cursor: default;
+    opacity: 0.45;
+}
+
+.vc-inspector-tool:disabled:hover {
+    background: none;
+}
+
+.vc-inspector-sheet-head .vc-inspector-tool:first-child[data-tip]:hover::after,
+.vc-inspector-sheet-head .vc-inspector-tool:nth-child(2)[data-tip]:hover::after {
+    right: auto;
+    left: 0;
+}
+
+.vc-inspector-filter {
+    width: 100%;
+    height: 30px;
+    margin-bottom: 8px;
+    padding: 0 10px;
+    box-sizing: border-box;
+    border: 1px solid var(--border-subtle, rgb(255 255 255 / 10%));
+    border-radius: 8px !important;
+    background: var(--background-modifier-hover) !important;
+    color: var(--text-default);
+    font: 12.5px var(--font-code, monospace);
+}
+
+.vc-inspector-filter:focus {
+    border-color: var(--vc-inspector-accent);
+    outline: none;
+}
+
+.vc-inspector-filter::placeholder {
+    color: var(--text-muted);
+}
+
+.vc-inspector-fold {
+    margin-bottom: 6px;
+    border: 1px solid var(--border-subtle, rgb(255 255 255 / 8%));
+    border-radius: 8px;
+    background: var(--background-modifier-hover);
+}
+
+.vc-inspector-fold-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.vc-inspector-fold-head:focus-visible {
+    outline: 2px solid var(--vc-inspector-accent);
+    outline-offset: -2px;
+}
+
+.vc-inspector-fold-arrow {
+    flex: none;
+    color: var(--text-muted);
+    transition: rotate 0.15s ease-out;
+}
+
+.vc-inspector-fold[data-open="true"] .vc-inspector-fold-arrow {
+    rotate: 90deg;
+}
+
+.vc-inspector-fold-body {
+    padding: 0 8px 8px;
+}
+
+.vc-inspector-chip-ghost {
+    border: 1px dashed color-mix(in srgb, var(--vc-inspector-accent) 60%, transparent);
+    background: none;
+    color: var(--vc-inspector-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .vc-inspector-fold-arrow,
+    .vc-inspector-grip {
         transition: none;
     }
 }

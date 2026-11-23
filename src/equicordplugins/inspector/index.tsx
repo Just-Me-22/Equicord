@@ -181,6 +181,31 @@ const settings = definePluginSettings({
         type: OptionType.BOOLEAN,
         description: "List every rule that lost, instead of the first four.",
         default: false
+    },
+    side: {
+        type: OptionType.SELECT,
+        description: "Which side of the window the Inspector opens on. Press d in the Inspector to switch.",
+        options: [
+            { label: "Right", value: "right", default: true },
+            { label: "Left", value: "left" },
+            { label: "Away from what you picked", value: "auto" }
+        ]
+    },
+    sheetWidth: {
+        type: OptionType.NUMBER,
+        description: "Inspector width in pixels. Dragging its inner edge changes this too.",
+        default: 560,
+        isValid: (v: number) => (Number.isFinite(v) && v >= 380) || "Must be at least 380"
+    },
+    autoSave: {
+        type: OptionType.BOOLEAN,
+        description: "Save every pick to a file straight away, and to latest.txt beside it.",
+        default: false
+    },
+    openSections: {
+        type: OptionType.CUSTOM,
+        description: "",
+        default: ["Element", "Selector", "Path"] as string[]
     }
 });
 

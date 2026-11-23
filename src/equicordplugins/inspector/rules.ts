@@ -822,3 +822,46 @@ export function compare(a: Element, b: Element): string[] {
 
     return out;
 }
+
+const INHERITED = ["color", "font-size", "font-family", "font-weight", "letter-spacing", "line-height"];
+const INHERIT_HOPS = 12;
+
+export function inherited(el: Element): string[] {
+    const own = new Map<string, Hit[]>();
+    collect(el, own);
+    const open = new Set(INHERITED.filter(prop => !own.get(prop)?.length));
+    if (!open.size) return ["every inherited text property is set on this element itself"];
+
+    const cs = getComputedStyle(el as HTMLElement);
+    const found = new Map<string, string[]>();
+    let hops = 0;
+
+    for (let up = el.parentElement; up && open.size && hops < INHERIT_HOPS; up = up.parentElement) {
+        hops++;
+        const map = new Map<string, Hit[]>();
+        collect(up, map);
+        const there = getComputedStyle(up);
+        for (const prop of Array.from(open)) {
+            const hits = map.get(prop);
+            if (!hits?.length) continue;
+            hits.sort((a, b) => (+b.important - +a.important) || (b.spec - a.spec) || (b.order - a.order));
+            const win = hits[0];
+            found.set(prop, [
+                `${prop.padEnd(21)}${cs.getPropertyValue(prop)}`,
+                `  inherited from  ${label(up)}   ${hops} up`,
+                `  won by  ${win.sel.slice(0, 58)}${win.important ? "  !important" : ""}  ${specText(win.spec)}`,
+                `  from    ${win.src}`,
+                `  value   ${win.value.trim().slice(0, 120)}`,
+                ...(win.value.match(/--[\w-]+/g) ?? []).map(token => `  token   ${token} = ${there.getPropertyValue(token).trim() || "(unset there)"}`),
+                ""
+            ]);
+            open.delete(prop);
+        }
+    }
+
+    const out = INHERITED.flatMap(prop => found.get(prop) ?? []);
+    for (const prop of open) {
+        out.push(`${prop.padEnd(21)}${cs.getPropertyValue(prop)}`, `  nothing readable sets this within ${INHERIT_HOPS} ancestors: a browser default or an unreadable sheet`, "");
+    }
+    return out;
+}

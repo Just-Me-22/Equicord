@@ -5,7 +5,7 @@
  */
 
 import { DATA_DIR } from "@main/utils/constants";
-import { IpcMainInvokeEvent } from "electron";
+import { IpcMainInvokeEvent, shell } from "electron";
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { extname, join } from "path";
 
@@ -56,4 +56,11 @@ export function appendNotes(_: IpcMainInvokeEvent, path: string, text: string): 
     if (!existsSync(path)) throw new Error(`there is no file at ${path}`);
     appendFileSync(path, text, "utf8");
     return path;
+}
+
+export async function openFolder(_: IpcMainInvokeEvent): Promise<string> {
+    mkdirSync(REPORTS, { recursive: true });
+    const failed = await shell.openPath(REPORTS);
+    if (failed) throw new Error(failed);
+    return REPORTS;
 }

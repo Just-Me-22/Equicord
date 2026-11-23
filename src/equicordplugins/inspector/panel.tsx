@@ -6,7 +6,6 @@
 
 import { Settings } from "@api/Settings";
 import ErrorBoundary from "@components/ErrorBoundary";
-import { ExpandableSection } from "@components/ExpandableCard";
 import { Heading } from "@components/Heading";
 import { Text } from "@components/Text";
 import { PluginNative } from "@utils/types";
@@ -15,8 +14,9 @@ import type { Root } from "react-dom/client";
 
 import { read } from "./classMap";
 import { cl, Lines } from "./lines";
+import { around, contrast, inlineStyles, paintStack, unclickable } from "./paint";
 import { arm, Point, setReference, thumbnail } from "./picker";
-import { atPoint, compare, inside, label, layout, path, pseudo, selector, vars, warmRemoteSheets, winners } from "./rules";
+import { compare, inherited, inside, label, layout, path, pseudo, selector, vars, warmRemoteSheets, winners } from "./rules";
 import { exportHtml, hashDiff, hasRules, owners, react, record, restyleCost, watch } from "./tools";
 
 const ICONS = {
@@ -31,6 +31,10 @@ const ICONS = {
     timer: "M9 2h6v2H9V2Zm3 3a8 8 0 1 1 0 16 8 8 0 0 1 0-16Zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12Zm-1 2h2v4.6l3 1.8-1 1.7-4-2.4V9Z",
     html: "M8.6 7.4 4 12l4.6 4.6L7.2 18 1.2 12l6-6 1.4 1.4Zm6.8 0L20 12l-4.6 4.6 1.4 1.4 6-6-6-6-1.4 1.4Z",
     close: "M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12 19 17.6 17.6 19 12 13.4 6.4 19 5 17.6 10.6 12 5 6.4 6.4 5Z",
+    dock: "M3 5h18v14H3V5Zm2 2v10h8V7H5Zm10 0v10h4V7h-4Z",
+    folder: "M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6Zm2 0v12h14V8h-8.8l-2-2H5Z",
+    back: "M14.6 6.4 9 12l5.6 5.6L13.2 19l-7-7 7-7 1.4 1.4Z",
+    forward: "M9.4 6.4 15 12l-5.6 5.6L10.8 19l7-7-7-7-1.4 1.4Z",
     check: "M9.5 16.2 5.3 12l-1.4 1.4 5.6 5.6 11-11-1.4-1.4z"
 } as const;
 
@@ -38,32 +42,86 @@ const Icon = ({ name }: { name: keyof typeof ICONS; }) => (
     <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d={ICONS[name]} /></svg>
 );
 
-function Section({ title, lines, start, n, copied, onCopy }: {
+const DEFAULT_OPEN = ["Element", "Selector", "Path"];
+const remembered = () => new Set<string>(Settings.plugins.Inspector.openSections ?? DEFAULT_OPEN);
+
+function Fold({ title, initial, forced, head, children }: {
     title: string;
-    lines: string[];
+    initial?: boolean;
+    forced?: boolean;
+    head: React.ReactNode;
+    children: () => React.ReactNode;
+}) {
+    const [open, setOpen] = useState(() => initial ?? remembered().has(title));
+    const shown = forced || open;
+
+    const toggle = () => {
+        const next = !open;
+        setOpen(next);
+        if (initial !== undefined) return;
+        const all = remembered();
+        if (next) all.add(title);
+        else all.delete(title);
+        Settings.plugins.Inspector.openSections = [...all];
+    };
+
+    return (
+        <section className={cl("fold")} data-open={shown}>
+            <div
+                className={cl("fold-head")}
+                role="button"
+                tabIndex={0}
+                aria-expanded={shown}
+                onClick={toggle}
+                onKeyDown={e => {
+                    if (e.key !== "Enter" && e.key !== " ") return;
+                    e.preventDefault();
+                    toggle();
+                }}
+            >
+                <svg className={cl("fold-arrow")} viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d={ICONS.forward} /></svg>
+                {head}
+            </div>
+            {shown && <div className={cl("fold-body")}>{children()}</div>}
+        </section>
+    );
+}
+
+function Section({ title, get, known, start, n, copied, onCopy, filter }: {
+    title: string;
+    get: () => string[];
+    known: string[] | undefined;
     start?: boolean;
     n: number;
     copied: boolean;
     onCopy: () => void;
+    filter: string;
 }) {
     const take = (e: React.MouseEvent) => {
         e.stopPropagation();
         onCopy();
     };
 
+    const hits = filter && known ? known.filter(line => line.toLowerCase().includes(filter)) : null;
+    if (hits && !hits.length) return null;
+
     return (
-        <ExpandableSection
-            initialExpanded={start === true}
-            renderContent={() => <Lines lines={lines} section={title} />}
+        <Fold
+            title={title}
+            initial={start ? true : undefined}
+            forced={!!hits}
+            head={
+                <div className={cl("section-head")}>
+                    <kbd className={cl("key", copied && "key-done")} onClick={take} title={n < 10 ? `Copy, or press ${n}` : "Copy"}>
+                        {copied ? <Icon name="check" /> : n < 10 ? n : "·"}
+                    </kbd>
+                    <Heading tag="h3" className={cl("section-title")}>{title}</Heading>
+                    <span className={cl("count")}>{hits ? `${hits.length} of ${known!.length}` : known ? known.length : "open to read"}</span>
+                </div>
+            }
         >
-            <div className={cl("section-head")}>
-                <kbd className={cl("key", copied && "key-done")} onClick={take} title={n < 10 ? `Copy, or press ${n}` : "Copy"}>
-                    {copied ? <Icon name="check" /> : n < 10 ? n : "·"}
-                </kbd>
-                <Heading tag="h3" className={cl("section-title")}>{title}</Heading>
-                <span className={cl("count")}>{lines.length}</span>
-            </div>
-        </ExpandableSection>
+            {() => <Lines lines={hits ?? get()} section={title} />}
+        </Fold>
     );
 }
 
@@ -177,7 +235,7 @@ const typing = (el: EventTarget | null) => {
 /** the wrapper is what a click reaches; the dot painted on top of it is usually what you
  *  wanted. this lists both, and the parent, so getting to either is one click. */
 function Nearby({ el, at }: { el: Element; at?: Point; }) {
-    const here = useMemo(() => at ? atPoint(el, at.x, at.y).filter(one => one !== el) : [], [el, at]);
+    const here = useMemo(() => at ? around(el, at.x, at.y).filter(one => one !== el && !one.contains(el)) : [], [el, at]);
     const up = el.parentElement;
     // a click lands on whatever is on top, which is often a wrapper. without a way down
     // the only element you can reach reliably is the one you already have.
@@ -192,7 +250,20 @@ function Nearby({ el, at }: { el: Element; at?: Point; }) {
             <span className={cl("nearby-label")}>also here</span>
             {up && <button type="button" className={cl("chip")} onClick={jump(up)}>↑ {label(up)}</button>}
             {down.map((node, i) => <button key={`down-${i}`} type="button" className={cl("chip")} onClick={jump(node)}>↓ {label(node)}</button>)}
-            {here.map((node, i) => <button key={i} type="button" className={cl("chip")} onClick={jump(node)}>{label(node)}</button>)}
+            {here.map((node, i) => {
+                const ghost = unclickable(node);
+                return (
+                    <button
+                        key={i}
+                        type="button"
+                        className={cl("chip", ghost && "chip-ghost")}
+                        title={ghost ? "Ignores the pointer, so a click never lands on it" : undefined}
+                        onClick={jump(node)}
+                    >
+                        {label(node)}
+                    </button>
+                );
+            })}
         </div>
     );
 }
@@ -210,6 +281,18 @@ export interface Pick {
     ref: WeakRef<Element>;
     label: string;
     at: number;
+    point?: Point;
+}
+
+interface Part { title: string; lines?: string[]; make?: () => string[]; start?: boolean; }
+
+type Side = "left" | "right";
+
+function sideFor(el: Element, at?: Point): Side {
+    const want = Settings.plugins.Inspector.side as Side | "auto";
+    if (want === "left" || want === "right") return want;
+    const box = el.getBoundingClientRect();
+    return (at?.x ?? box.left + box.width / 2) > innerWidth / 2 ? "left" : "right";
 }
 
 export const history: Pick[] = [];
@@ -221,7 +304,7 @@ export const onHistory = (fn: () => void) => {
 
 let pinned: WeakRef<Element> | null = null;
 
-function Report({ el, other }: { el: Element; other?: Element; }) {
+function Report({ el, other, at, onFlip }: { el: Element; other?: Element; at?: Point; onFlip: () => void; }) {
     // themes arrive through an @import from a cdn, and a cross-origin sheet throws on
     // cssRules. fetching them first is the difference between naming the rule that wins
     // and reporting that nine stylesheets could not be read.
@@ -240,10 +323,10 @@ function Report({ el, other }: { el: Element; other?: Element; }) {
 
     const against = other ?? (pinned?.deref() !== el ? pinned?.deref() : undefined);
 
-    const fixed = useMemo(() => [
-        { title: "Element", lines: element(el), start: true },
-        { title: "Selector", lines: selector(el), start: true },
-        { title: "Path", lines: path(el), start: true },
+    const fixed = useMemo<Part[]>(() => [
+        { title: "Element", lines: element(el) },
+        { title: "Selector", lines: selector(el) },
+        { title: "Path", lines: path(el) },
         { title: "Inside", lines: inside(el) },
         { title: "Winning rules", lines: winners(el) },
         { title: "Pseudo elements", lines: pseudo(el) },
@@ -252,10 +335,32 @@ function Report({ el, other }: { el: Element; other?: Element; }) {
         { title: "Owners", lines: owners(el) },
         { title: "React", lines: react(el) },
         { title: ":has() rules", lines: hasRules(el) },
+        { title: "Inherited", make: () => inherited(el) },
+        { title: "Contrast", lines: contrast(el) },
+        { title: "Paint stack", lines: paintStack(el, at) },
+        { title: "Inline styles", lines: inlineStyles(el) },
         ...(against?.isConnected ? [{ title: "Compared", lines: compare(el, against), start: true }] : [])
     ], [el, against, warmed]);
 
-    const sections = [
+    const made = useRef(new Map<string, string[]>());
+    useEffect(() => made.current.clear(), [fixed]);
+    const [, bump] = useState(0);
+    const linesOf = (one: Part) => {
+        if (one.lines) return one.lines;
+        let lines = made.current.get(one.title);
+        if (!lines) {
+            lines = one.make!();
+            made.current.set(one.title, lines);
+            queueMicrotask(() => bump(n => n + 1));
+        }
+        return lines;
+    };
+    const knownOf = (one: Part) => one.lines ?? made.current.get(one.title);
+
+    const [filter, setFilter] = useState("");
+    const filterBox = useRef<HTMLInputElement>(null);
+
+    const sections: Part[] = [
         ...fixed,
         ...(since ? [{ title: "Since last dump", lines: since }] : []),
         ...(watched ? [{ title: "Watching", lines: watched.length ? watched : ["waiting for a change"], start: true }] : []),
@@ -269,11 +374,11 @@ function Report({ el, other }: { el: Element; other?: Element; }) {
     const copy = (n: number) => {
         const one = sections[n];
         if (!one) return;
-        navigator.clipboard.writeText(one.lines.join("\n")).then(() => setCopied(n), () => setCopied(-1));
+        navigator.clipboard.writeText(linesOf(one).join("\n")).then(() => setCopied(n), () => setCopied(-1));
     };
 
     const everything = () =>
-        sections.map(one => `=== ${one.title} ===\n${one.lines.join("\n")}`).join("\n\n");
+        sections.map(one => `=== ${one.title} ===\n${linesOf(one).join("\n")}`).join("\n\n");
 
     /** one paste that answers everything, so the question is never which block to send */
     const copyAll = () => {
@@ -284,9 +389,25 @@ function Report({ el, other }: { el: Element; other?: Element; }) {
      *  read by whatever is helping, which is the whole round trip this removes. */
     const saveAll = () => {
         setStatus("saving...");
-        Native.save(`${stamp()}-${nameFor(el)}.txt`, everything()).then(
-            file => { setStatus(`written to ${file}`); setFlash(file.split(/[\\/]/).pop() ?? file); },
+        const text = everything();
+        Native.save(`${stamp()}-${nameFor(el)}.txt`, text).then(
+            file => {
+                setStatus(`written to ${file}, and to latest.txt beside it`);
+                setFlash(file.split(/[\\/]/).pop() ?? file);
+                return Native.save("latest.txt", text);
+            },
             error => setStatus(`could not write the file: ${error?.message ?? String(error)}`)
+        );
+    };
+
+    useEffect(() => {
+        if (warmed && Settings.plugins.Inspector.autoSave) saveAll();
+    }, [warmed]);
+
+    const openFolder = () => {
+        Promise.resolve().then(() => Native.openFolder()).then(
+            folder => setStatus(`opened ${folder}`),
+            error => setStatus(`could not open the folder: ${error?.message ?? String(error)}`)
         );
     };
 
@@ -300,7 +421,10 @@ function Report({ el, other }: { el: Element; other?: Element; }) {
     const addNotes = () => {
         const file = Settings.plugins.Inspector.notesFile as string;
         if (!file) return setStatus("set a notes file in Inspector's settings first");
-        const lines = ["Element", "Selector", "Path"].flatMap(title => sections.find(one => one.title === title)?.lines ?? []);
+        const lines = ["Element", "Selector", "Path"].flatMap(title => {
+            const one = sections.find(part => part.title === title);
+            return one ? linesOf(one) : [];
+        });
         const text = `\n### ${label(el)} (Inspector, ${new Date().toISOString().slice(0, 10)})\n\n\`\`\`\n${lines.join("\n")}\n\`\`\`\n`;
         Promise.resolve().then(() => Native.appendNotes(file, text)).then(
             () => setStatus(`added to ${file}`),
@@ -356,7 +480,9 @@ function Report({ el, other }: { el: Element; other?: Element; }) {
 
     const keys: Record<string, () => void> = {
         KeyS: saveAll, KeyP: togglePin, KeyC: compareNext, KeyA: pickAnother, KeyN: addNotes,
-        KeyW: toggleWatch, KeyR: recordNow, KeyT: timeIt, KeyE: saveHtml, Digit0: copyAll
+        KeyW: toggleWatch, KeyR: recordNow, KeyT: timeIt, KeyE: saveHtml, Digit0: copyAll,
+        KeyO: openFolder, KeyD: onFlip, BracketLeft: () => go(1), BracketRight: () => go(-1),
+        Slash: () => filterBox.current?.focus()
     };
 
     useEffect(() => {
@@ -383,6 +509,7 @@ function Report({ el, other }: { el: Element; other?: Element; }) {
             <div className={cl("tools")}>
                 <Tool icon={copied === -2 ? "check" : "copy"} label="Copy everything" keyName="0" onClick={copyAll} />
                 <Tool icon={flash ? "check" : "save"} label="Save to a file" keyName="s" onClick={saveAll} />
+                <Tool icon="folder" label="Open the folder with saved files" keyName="o" onClick={openFolder} />
                 <Tool icon="notes" label="Add to your notes file" keyName="n" onClick={addNotes} />
                 <span className={cl("tools-gap")} />
                 <Tool icon="pin" label={isPinned ? "Unpin" : "Pin, to compare and measure from"} keyName="p" onClick={togglePin} active={isPinned} />
@@ -397,33 +524,109 @@ function Report({ el, other }: { el: Element; other?: Element; }) {
 
             {(flash || status) && <div className={cl("status")}>{flash ? `saved ${flash}` : status}</div>}
 
+            <input
+                ref={filterBox}
+                className={cl("filter")}
+                type="text"
+                value={filter}
+                placeholder="Filter lines in every section, or press /"
+                aria-label="Filter lines"
+                spellCheck={false}
+                onChange={e => setFilter(e.currentTarget.value)}
+                onKeyDown={e => {
+                    if (e.key !== "Escape") return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setFilter("");
+                    e.currentTarget.blur();
+                }}
+            />
+
             {sections.slice(0, 2).map((one, i) => (
-                <Section key={one.title} {...one} n={i + 1} copied={copied === i} onCopy={() => copy(i)} />
+                <Section key={one.title} title={one.title} start={one.start} get={() => linesOf(one)} known={knownOf(one)} filter={filter.trim().toLowerCase()} n={i + 1} copied={copied === i} onCopy={() => copy(i)} />
             ))}
 
-            <ExpandableSection initialExpanded={false} renderContent={() => <Try el={el} />}>
-                <div className={cl("section-head")}>
-                    <kbd className={cl("key")}>·</kbd>
-                    <Heading tag="h3" className={cl("section-title")}>Try a value</Heading>
-                </div>
-            </ExpandableSection>
+            {!filter.trim() && (
+                <Fold
+                    title="Try a value"
+                    head={
+                        <div className={cl("section-head")}>
+                            <kbd className={cl("key")}>·</kbd>
+                            <Heading tag="h3" className={cl("section-title")}>Try a value</Heading>
+                        </div>
+                    }
+                >
+                    {() => <Try el={el} />}
+                </Fold>
+            )}
 
             {sections.slice(2).map((one, i) => (
-                <Section key={one.title} {...one} n={i + 3} copied={copied === i + 2} onCopy={() => copy(i + 2)} />
+                <Section key={one.title} title={one.title} start={one.start} get={() => linesOf(one)} known={knownOf(one)} filter={filter.trim().toLowerCase()} n={i + 3} copied={copied === i + 2} onCopy={() => copy(i + 2)} />
             ))}
         </>
     );
 }
 
+const MIN_WIDTH = 380;
+const EDGE = 12;
+
 function Sheet({ el, other, at }: { el: Element; other?: Element; at?: Point; }) {
     const named = read(el).find(one => one.name)?.name;
+    const [side, setSide] = useState<Side>(() => sideFor(el, at));
+    const [width, setWidth] = useState<number>(() => Settings.plugins.Inspector.sheetWidth ?? 560);
+
+    const flip = () => {
+        const next: Side = side === "right" ? "left" : "right";
+        Settings.plugins.Inspector.side = next;
+        setSide(next);
+    };
+
+    const resize = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        const grip = e.currentTarget;
+        grip.setPointerCapture(e.pointerId);
+        let latest = width;
+        const move = (ev: PointerEvent) => {
+            const wanted = side === "right" ? innerWidth - ev.clientX - EDGE : ev.clientX - EDGE;
+            latest = Math.round(Math.min(Math.max(MIN_WIDTH, wanted), innerWidth * 0.8));
+            setWidth(latest);
+        };
+        const up = () => {
+            grip.removeEventListener("pointermove", move);
+            grip.removeEventListener("pointerup", up);
+            grip.removeEventListener("pointercancel", up);
+            Settings.plugins.Inspector.sheetWidth = latest;
+        };
+        grip.addEventListener("pointermove", move);
+        grip.addEventListener("pointerup", up);
+        grip.addEventListener("pointercancel", up);
+    };
+
+    const older = history.slice(cursor + 1).some(one => one.ref.deref()?.isConnected);
+    const newer = history.slice(0, cursor).some(one => one.ref.deref()?.isConnected);
+    const across = side === "right" ? "left" : "right";
+
     return (
-        <aside className={cl("sheet")} aria-label="Inspector">
+        <aside className={cl("sheet", `sheet-${side}`)} aria-label="Inspector" style={{ "--vc-inspector-width": `${width}px` } as React.CSSProperties}>
+            <div className={cl("grip")} role="separator" aria-orientation="vertical" aria-label="Drag to resize" title="Drag to resize" onPointerDown={resize} />
             <header className={cl("sheet-head")}>
+                <button type="button" className={cl("tool")} aria-label="Previous pick" data-tip="Previous pick" disabled={!older} onClick={() => go(1)}>
+                    <Icon name="back" />
+                    <kbd className={cl("key", "key-small")}>[</kbd>
+                </button>
+                <button type="button" className={cl("tool")} aria-label="Next pick" data-tip="Next pick" disabled={!newer} onClick={() => go(-1)}>
+                    <Icon name="forward" />
+                    <kbd className={cl("key", "key-small")}>]</kbd>
+                </button>
                 <div className={cl("sheet-title")}>
                     <Text size="md" weight="semibold">Inspector</Text>
                     <span className={cl("sheet-subtitle")}>{named ? `${el.tagName.toLowerCase()} · ${named}` : el.tagName.toLowerCase()}</span>
                 </div>
+                <button type="button" className={cl("tool")} aria-label={`Move to the ${across}`} data-tip={`Move to the ${across}`} onClick={flip}>
+                    <Icon name="dock" />
+                    <kbd className={cl("key", "key-small")}>d</kbd>
+                </button>
                 <button type="button" className={cl("tool")} aria-label="Close" data-tip="Close" onClick={close}>
                     <Icon name="close" />
                     <kbd className={cl("key", "key-small")}>esc</kbd>
@@ -432,7 +635,7 @@ function Sheet({ el, other, at }: { el: Element; other?: Element; at?: Point; })
             <div className={cl("sheet-body")}>
                 <Shot el={el} />
                 <Nearby el={el} at={at} />
-                <Report el={el} other={other} />
+                <Report el={el} other={other} at={at} onFlip={flip} />
             </div>
         </aside>
     );
@@ -441,6 +644,18 @@ function Sheet({ el, other, at }: { el: Element; other?: Element; at?: Point; })
 let host: HTMLElement | null = null;
 let root: Root | null = null;
 let opened = 0;
+let cursor = 0;
+
+function go(step: number) {
+    for (let at = cursor + step; at >= 0 && at < history.length; at += step) {
+        const one = history[at];
+        const el = one.ref.deref();
+        if (!el?.isConnected) continue;
+        cursor = at;
+        present(el, undefined, one.point);
+        return;
+    }
+}
 
 function render(node: React.ReactNode) {
     if (!host?.isConnected) {
@@ -464,9 +679,14 @@ export function destroy() {
 }
 
 export function show(el: Element, other?: Element, at?: Point) {
-    history.unshift({ ref: new WeakRef(el), label: label(el), at: Date.now() });
+    history.unshift({ ref: new WeakRef(el), label: label(el), at: Date.now(), point: at });
     history.splice(20);
+    cursor = 0;
     for (const tell of historyWatchers) tell();
+    present(el, other, at);
+}
+
+function present(el: Element, other?: Element, at?: Point) {
     setReference(pinned?.deref() ?? el);
 
     render(
