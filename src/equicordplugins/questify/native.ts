@@ -41,7 +41,7 @@ export async function complete(event: IpcMainInvokeEvent, appId: string, authCod
         !isSnowflake(questId) && "questId",
         !isAuthCode(authCode) && "authCode",
         !isQuestTarget(questTarget) && "questTarget",
-        !isProxyTicket(proxyTicket) && `proxyTicket(${proxyTicket === null ? "null" : typeof proxyTicket}, length ${typeof proxyTicket === "string" ? proxyTicket.length : 0}, dots ${typeof proxyTicket === "string" ? proxyTicket.split(".").length - 1 : 0})`,
+        !isProxyTicket(proxyTicket) && "proxyTicket",
     ].filter(Boolean);
 
     if (invalid.length) {
