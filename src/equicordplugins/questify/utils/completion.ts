@@ -95,7 +95,7 @@ const sendHeartbeat = findByCodeLazy(".QUESTS_HEARTBEAT(") as (options: {
     terminal?: boolean;
     executableFingerprint?: unknown;
 }) => Promise<void>;
-const getApplicationProxyTicket = findByCodeLazy(".expiresAt>", ".ticket;") as (applicationId: string, channelId?: string) => Promise<string>;
+const getApplicationProxyTicket = findByCodeLazy(".expiresAt>", ".ticket;") as (applicationId: string, channelId?: string) => Promise<string | { ticket?: string; prefetched?: boolean; } | null | undefined>;
 export const enrollInQuestNative = findByCodeLazy('type:"QUESTS_ENROLL_BEGIN",') as (questId: string, options: QuestEnrollmentMetadata) => Promise<QuestEnrollResult>;
 const sortQuestsNative = findByCodeLazy("sortMethod:", "isRenewableEndDateSortEnabled") as (quests: Quest[], options: { sortMethod: string; filters: unknown[]; }) => Quest[];
 const getQuestOrbQuantity = findByCodeLazy("premiumOrbQuantity??", "orbQuantity") as (
@@ -109,7 +109,10 @@ const ActivityLauncher = findByPropsLazy("launch", "getDetectableGames") as {
 
 async function getActivityProxyTicket(appId: string): Promise<string | undefined> {
     try {
-        return await getApplicationProxyTicket(appId);
+        const result = await getApplicationProxyTicket(appId);
+        const ticket = typeof result === "string" ? result : result?.ticket;
+
+        return typeof ticket === "string" ? ticket : undefined;
     } catch {
         QL.error("AUTO_COMPLETE_ACHIEVEMENT_PROXY_TICKET_FAILED", { appId });
     }

@@ -36,8 +36,16 @@ export async function complete(event: IpcMainInvokeEvent, appId: string, authCod
         return { success: false, error: "Untrusted request sender." };
     }
 
-    if (!isSnowflake(appId) || !isSnowflake(questId) || !isAuthCode(authCode) || !isQuestTarget(questTarget) || !isProxyTicket(proxyTicket)) {
-        return { success: false, error: "Invalid completion arguments." };
+    const invalid = [
+        !isSnowflake(appId) && "appId",
+        !isSnowflake(questId) && "questId",
+        !isAuthCode(authCode) && "authCode",
+        !isQuestTarget(questTarget) && "questTarget",
+        !isProxyTicket(proxyTicket) && `proxyTicket(${proxyTicket === null ? "null" : typeof proxyTicket}, length ${typeof proxyTicket === "string" ? proxyTicket.length : 0}, dots ${typeof proxyTicket === "string" ? proxyTicket.split(".").length - 1 : 0})`,
+    ].filter(Boolean);
+
+    if (invalid.length) {
+        return { success: false, error: `Invalid completion arguments: ${invalid.join(", ")}.` };
     }
 
     const origin = new URL(`https://${appId}.discordsays.com/`);
