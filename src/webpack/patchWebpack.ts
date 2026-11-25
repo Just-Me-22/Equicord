@@ -10,6 +10,7 @@ import { traceFunctionWithResults } from "@debug/Tracer";
 import { makeLazy } from "@utils/lazy";
 import { Logger } from "@utils/Logger";
 import { interpolateIfDefined } from "@utils/misc";
+import { wrapFactorySource } from "@utils/patches";
 import { Patch, PatchReplacement } from "@utils/types";
 import { WebpackRequire } from "@vencord/discord-types/webpack";
 
@@ -628,10 +629,7 @@ function sourceOf(moduleId: PropertyKey, patchedBy: Set<string>, code: string) {
 }
 
 function applyPatches(moduleId: PropertyKey, originalFactory: AnyModuleFactory, originalFactoryCode: string, matched: Patch[], evalEach: boolean): AppliedPatches {
-    const isArrowFunction = originalFactoryCode.startsWith("(");
-
-    // 0, prefix to turn it into an expression: 0,function(){} would be invalid syntax without the 0,
-    const unpatchedCode = "0," + (!isArrowFunction ? "function" : "") + originalFactoryCode.slice(originalFactoryCode.indexOf("("));
+    const unpatchedCode = wrapFactorySource(originalFactoryCode);
     let patchedCode = unpatchedCode;
     let patchedSource = patchedCode;
     let patchedFactory = originalFactory;
