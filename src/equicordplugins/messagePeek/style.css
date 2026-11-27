@@ -1,16 +1,11 @@
-.vc-message-peek-timestamp {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    font-size: 12px;
-    font-weight: 500;
-    line-height: 16px;
-    color: var(--text-default);
-}
-
+.vc-message-peek-timestamp,
 .vc-message-peek-timestamp-favorites {
+    flex: 0 0 auto;
+    margin-left: auto;
+    padding-left: 6px;
     font-size: 12px;
     font-weight: 500;
+    font-variant-numeric: tabular-nums;
     line-height: 16px;
     color: var(--text-default);
 }
@@ -19,12 +14,13 @@
     color: var(--white);
 }
 
-[class*="interactive_"]:hover .vc-message-peek-timestamp {
+[class*="interactive_"]:hover :is(.vc-message-peek-timestamp, .vc-message-peek-timestamp-favorites) {
     display: none;
 }
 
-nav[class*="privateChannels_"] [class*="interactive_"]:not(:hover) [class*="name_"] {
-    padding-right: 34px;
+nav[class*="privateChannels_"] [class*="nameAndDecorators_"] > .vc-member-list-decorators-wrapper {
+    flex: 1 0 auto;
+    justify-content: flex-start;
 }
 
 .vc-message-peek-preview {
@@ -173,6 +169,7 @@ nav[class*="privateChannels_"] [class*="interactive_"]:not(:hover) [class*="name
     background: var(--background-base-lower);
     color: var(--interactive-icon-default);
     cursor: pointer;
+    flex: none;
 }
 
 .vc-message-peek-action:hover {
@@ -267,18 +264,20 @@ nav[class*="privateChannels_"] [class*="interactive_"]:not(:hover) [class*="name
     display: flex;
     align-items: center;
     height: 40px;
+    gap: 6px;
     padding: 0 8px;
     list-style: none;
 }
 
 .vc-message-peek-search-input {
     box-sizing: border-box;
-    width: 100%;
+    flex: 1 1 auto;
+    min-width: 0;
     height: 28px;
-    padding: 0 8px;
+    padding: 0 10px;
     border: none;
-    border-radius: 4px;
-    background: var(--input-background);
+    border-radius: 8px;
+    background: var(--background-mod-subtle);
     color: var(--text-default);
     font-size: 13px;
 }
